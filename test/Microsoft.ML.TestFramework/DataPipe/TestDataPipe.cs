@@ -1322,7 +1322,7 @@ namespace Microsoft.ML.RunTests
             var opt = new LatentDirichletAllocationEstimator.ColumnOptions(name: "F1V", numberOfTopics: 3,
                 numberOfSummaryTermsPerTopic: 3, alphaSum: 3, numberOfThreads: 1, resetRandomGenerator: true);
             var est = ML.Transforms.Text.LatentDirichletAllocation(opt);
-            var ldaTransformer = est.Fit(srcView);
+            using var ldaTransformer = est.Fit(srcView);
             var transformedData = ldaTransformer.Transform(srcView);
 
             using (var cursor = transformedData.GetRowCursorForAllColumns())
@@ -1372,7 +1372,8 @@ namespace Microsoft.ML.RunTests
             var srcView = builder.GetDataView();
             try
             {
-                var lda = ML.Transforms.Text.LatentDirichletAllocation("Zeros").Fit(srcView).Transform(srcView);
+                using var transformer = ML.Transforms.Text.LatentDirichletAllocation("Zeros").Fit(srcView);
+                var lda = transformer.Transform(srcView);
             }
             catch (InvalidOperationException ex)
             {

@@ -49,7 +49,7 @@ namespace Microsoft.ML.Transforms.Text
     /// <summary>
     /// <see cref="ITransformer"/> resulting from fitting a <see cref="LatentDirichletAllocationEstimator"/>.
     /// </summary>
-    public sealed class LatentDirichletAllocationTransformer : OneToOneTransformerBase
+    public sealed class LatentDirichletAllocationTransformer : OneToOneTransformerBase, IDisposable
     {
         internal sealed class Options : TransformInputBase
         {
@@ -693,25 +693,10 @@ namespace Microsoft.ML.Transforms.Text
             return new LatentDirichletAllocationTransformer(env, ldas, columnMappings, columns);
         }
 
-        private void Dispose(bool disposing)
-        {
-            if (_ldas != null)
-            {
-                foreach (var state in _ldas)
-                    state?.Dispose();
-            }
-            if (disposing)
-                GC.SuppressFinalize(this);
-        }
-
         public void Dispose()
         {
-            Dispose(true);
-        }
-
-        ~LatentDirichletAllocationTransformer()
-        {
-            Dispose(false);
+            foreach (var state in _ldas)
+                state?.Dispose();
         }
 
         // Factory method for SignatureLoadDataTransform.
@@ -892,11 +877,10 @@ namespace Microsoft.ML.Transforms.Text
             // Initialize all LDA states
             for (int i = 0; i < columns.Length; i++)
             {
-                var state = new LdaState(env, columns[i], numVocabs[i]);
-
                 if (numDocArray[i] == 0 || corpusSize[i] == 0)
                     throw ch.Except("The specified documents are all empty in column '{0}'.", columns[i].InputColumnName);
 
+                var state = new LdaState(env, columns[i], numVocabs[i]);
                 state.AllocateDataMemory(numDocArray[i], corpusSize[i]);
                 states[i] = state;
             }
