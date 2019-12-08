@@ -280,7 +280,7 @@ namespace Microsoft.ML.Transforms.Text
                 long aliasMemBlockSize = ctx.Reader.ReadInt64();
                 ectx.CheckDecode(aliasMemBlockSize > 0);
 
-                _ldaTrainer = new LdaSingleBox(
+                using LocalDisposable<LdaSingleBox> ldaTrainer = new LocalDisposable<LdaSingleBox>(new LdaSingleBox(
                     InfoEx.NumberOfTopics,
                     _numVocab, /* Need to set number of vocabulary here */
                     InfoEx.AlphaSum,
@@ -291,9 +291,9 @@ namespace Microsoft.ML.Transforms.Text
                     InfoEx.SamplingStepCount,
                     InfoEx.NumberOfSummaryTermsPerTopic,
                     false,
-                    InfoEx.MaximumTokenCountPerDocument);
+                    InfoEx.MaximumTokenCountPerDocument));
 
-                _ldaTrainer.AllocateModelMemory(_numVocab, InfoEx.NumberOfTopics, memBlockSize, aliasMemBlockSize);
+                ldaTrainer.Value.AllocateModelMemory(_numVocab, InfoEx.NumberOfTopics, memBlockSize, aliasMemBlockSize);
 
                 for (int i = 0; i < _numVocab; i++)
                 {
@@ -312,7 +312,7 @@ namespace Microsoft.ML.Transforms.Text
                     }
 
                     //set the topic into _ldaTrainer inner topic table
-                    _ldaTrainer.SetModel(termID, topicId, topicProb, termTopicNum);
+                    ldaTrainer.Value.SetModel(termID, topicId, topicProb, termTopicNum);
                 }
 
                 //do the preparation
@@ -320,10 +320,12 @@ namespace Microsoft.ML.Transforms.Text
                 {
                     lock (_preparationSyncRoot)
                     {
-                        _ldaTrainer.InitializeBeforeTest();
+                        ldaTrainer.Value.InitializeBeforeTest();
                         _predictionPreparationDone = true;
                     }
                 }
+
+                _ldaTrainer = ldaTrainer.Extract();
             }
 
             internal ModelParameters GetLdaSummary(VBuffer<ReadOnlyMemory<char>> mapping)
@@ -877,13 +879,13 @@ namespace Microsoft.ML.Transforms.Text
             // Initialize all LDA states
             for (int i = 0; i < columns.Length; i++)
             {
-                var state = new LdaState(env, columns[i], numVocabs[i]);
+                using LocalDisposable<LdaState> state = new LocalDisposable<LdaState>(new LdaState(env, columns[i], numVocabs[i]));
 
                 if (numDocArray[i] == 0 || corpusSize[i] == 0)
                     throw ch.Except("The specified documents are all empty in column '{0}'.", columns[i].InputColumnName);
 
-                state.AllocateDataMemory(numDocArray[i], corpusSize[i]);
-                states[i] = state;
+                state.Value.AllocateDataMemory(numDocArray[i], corpusSize[i]);
+                states[i] = state.Extract();
             }
 
             using (var cursor = inputData.GetRowCursor(activeColumns))
