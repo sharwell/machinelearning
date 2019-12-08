@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
 using Microsoft.ML.Trainers.FastTree;
 
@@ -25,21 +27,23 @@ namespace Microsoft.ML.Trainers.LightGbm
         public Booster(Dictionary<string, object> parameters, Dataset trainset, Dataset validset = null)
         {
             var param = LightGbmInterfaceUtils.JoinParameters(parameters);
-            LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.BoosterCreate(trainset.Handle, param, out var handle));
-            Handle = handle;
+            using LocalDisposable<WrappedLightGbmInterface.SafeBoosterHandle> handle = new LocalDisposable<WrappedLightGbmInterface.SafeBoosterHandle>(null);
+            LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.BoosterCreate(trainset.Handle, param, out Unsafe.AsRef(in handle.Value)));
             if (validset != null)
             {
-                LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.BoosterAddValidData(Handle, validset.Handle));
+                LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.BoosterAddValidData(handle.Value, validset.Handle));
                 _hasValid = true;
             }
 
             int numEval = 0;
             BestIteration = -1;
-            LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.BoosterGetEvalCounts(Handle, ref numEval));
+            LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.BoosterGetEvalCounts(handle.Value, ref numEval));
             // At most one metric in ML.NET.
             Contracts.Assert(numEval <= 1);
             if (numEval == 1)
                 _hasMetric = true;
+
+            Handle = handle.Extract();
         }
 
         public bool Update()

@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
 
 namespace Microsoft.ML.Trainers.LightGbm
@@ -20,7 +21,7 @@ namespace Microsoft.ML.Trainers.LightGbm
             bool verboseEval = true, int earlyStoppingRound = 0)
         {
             // create Booster.
-            Booster bst = new Booster(parameters, dtrain, dvalid);
+            using LocalDisposable<Booster> bst = new LocalDisposable<Booster>(new Booster(parameters, dtrain, dvalid));
 
             // Disable early stopping if we don't have validation data.
             if (dvalid == null && earlyStoppingRound > 0)
@@ -67,12 +68,12 @@ namespace Microsoft.ML.Trainers.LightGbm
             });
             for (iter = 0; iter < numIteration; ++iter)
             {
-                if (bst.Update())
+                if (bst.Value.Update())
                     break;
 
                 if (earlyStoppingRound > 0)
                 {
-                    validError = bst.EvalValid();
+                    validError = bst.Value.EvalValid();
                     if (validError * factorToSmallerBetter < bestScore)
                     {
                         bestScore = validError * factorToSmallerBetter;
@@ -88,13 +89,13 @@ namespace Microsoft.ML.Trainers.LightGbm
                 {
                     if (verboseEval)
                     {
-                        trainError = bst.EvalTrain();
+                        trainError = bst.Value.EvalTrain();
                         if (dvalid == null)
                             pch.Checkpoint(new double?[] { iter + 1, trainError });
                         else
                         {
                             if (earlyStoppingRound == 0)
-                                validError = bst.EvalValid();
+                                validError = bst.Value.EvalValid();
                             pch.Checkpoint(new double?[] { iter + 1,
                                 trainError, validError });
                         }
@@ -106,9 +107,10 @@ namespace Microsoft.ML.Trainers.LightGbm
             // Set the BestIteration.
             if (iter != numIteration && earlyStoppingRound > 0)
             {
-                bst.BestIteration = bestIter + 1;
+                bst.Value.BestIteration = bestIter + 1;
             }
-            return bst;
+
+            return bst.Extract();
         }
     }
 }

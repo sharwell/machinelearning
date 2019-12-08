@@ -472,7 +472,7 @@ namespace Microsoft.ML.Tests.TrainerEstimators
                 floatLabels[i] = labels[i];
 
             // Allocate LightGBM data container (called Dataset in LightGBM world).
-            var gbmDataSet = new Trainers.LightGbm.Dataset(sampleValueGroupedByColumn, sampleIndicesGroupedByColumn, _columnNumber, sampleNonZeroCntPerColumn, _rowNumber, _rowNumber, "", floatLabels);
+            using var gbmDataSet = new Trainers.LightGbm.Dataset(sampleValueGroupedByColumn, sampleIndicesGroupedByColumn, _columnNumber, sampleNonZeroCntPerColumn, _rowNumber, _rowNumber, "", floatLabels);
 
             // Push training examples into LightGBM data container.
             gbmDataSet.PushRows(dataMatrix, _rowNumber, _columnNumber, 0);
@@ -491,7 +491,7 @@ namespace Microsoft.ML.Tests.TrainerEstimators
             using (var pch = (mlContext as IProgressChannelProvider).StartProgressChannel("Training LightGBM..."))
             {
                 var host = (mlContext as IHostEnvironment).Register("Training LightGBM...");
-                var gbmNative = WrappedLightGbmTraining.Train(ch, pch, gbmParams, gbmDataSet, numIteration: numberOfTrainingIterations);
+                using var gbmNative = WrappedLightGbmTraining.Train(ch, pch, gbmParams, gbmDataSet, numIteration: numberOfTrainingIterations);
 
                 int nativeLength = 0;
                 unsafe

@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -562,18 +563,19 @@ namespace Microsoft.ML.Trainers.LightGbm
             CheckAndUpdateParametersBeforeTraining(ch, trainData, labels, groups);
             string param = LightGbmInterfaceUtils.JoinParameters(GbmOptions);
 
-            Dataset dtrain;
+            using LocalDisposable<Dataset> dtrain = new LocalDisposable<Dataset>(null);
+
             // To reduce peak memory usage, only enable one sampling task at any given time.
             lock (LightGbmShared.SampleLock)
             {
                 CreateDatasetFromSamplingData(ch, factory, numRow,
-                    param, labels, weights, groups, catMetaData, out dtrain);
+                    param, labels, weights, groups, catMetaData, out Unsafe.AsRef(in dtrain.Value));
             }
 
             // Push rows into dataset.
-            LoadDataset(ch, factory, dtrain, numRow, LightGbmTrainerOptions.BatchSize, catMetaData);
+            LoadDataset(ch, factory, dtrain.Value, numRow, LightGbmTrainerOptions.BatchSize, catMetaData);
 
-            return dtrain;
+            return dtrain.Extract();
         }
 
         private Dataset LoadValidationData(IChannel ch, Dataset dtrain, RoleMappedData validData, CategoricalMetaData catMetaData)
@@ -590,12 +592,12 @@ namespace Microsoft.ML.Trainers.LightGbm
             GetMetainfo(ch, factory, out int numRow, out float[] labels, out float[] weights, out int[] groups);
 
             // Construct validation dataset.
-            Dataset dvalid = new Dataset(dtrain, numRow, labels, weights, groups);
+            using LocalDisposable<Dataset> dvalid = new LocalDisposable<Dataset>(new Dataset(dtrain, numRow, labels, weights, groups));
 
             // Push rows into dataset.
-            LoadDataset(ch, factory, dvalid, numRow, LightGbmTrainerOptions.BatchSize, catMetaData);
+            LoadDataset(ch, factory, dvalid.Value, numRow, LightGbmTrainerOptions.BatchSize, catMetaData);
 
-            return dvalid;
+            return dvalid.Extract();
         }
 
         private void TrainCore(IChannel ch, IProgressChannel pch, Dataset dtrain, CategoricalMetaData catMetaData, Dataset dvalid = null)

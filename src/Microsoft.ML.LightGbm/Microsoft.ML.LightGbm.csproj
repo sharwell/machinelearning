@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="LightGBM" Version="$(LightGBMPackageVersion)" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="$(SystemRuntimeCompilerServicesUnsafePackageVersion)" />
   </ItemGroup>
 
 </Project>

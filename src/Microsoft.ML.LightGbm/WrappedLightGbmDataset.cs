@@ -3,7 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
 
 namespace Microsoft.ML.Trainers.LightGbm
@@ -46,7 +48,7 @@ namespace Microsoft.ML.Trainers.LightGbm
             int numTotalRow,
             string param, float[] labels, float[] weights = null, int[] groups = null)
         {
-            _handle = null;
+            using LocalDisposable<WrappedLightGbmInterface.SafeDataSetHandle> handle = new LocalDisposable<WrappedLightGbmInterface.SafeDataSetHandle>(null);
 
             // Use GCHandle to pin the memory, avoid the memory relocation.
             GCHandle[] gcValues = new GCHandle[numCol];
@@ -68,7 +70,7 @@ namespace Microsoft.ML.Trainers.LightGbm
                     // Create container. Examples will pushed in later.
                     LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.DatasetCreateFromSampledColumn(
                         (IntPtr)ptrValues, (IntPtr)ptrIndices, numCol, sampleNonZeroCntPerColumn, numSampleRow, numTotalRow,
-                        param, out _handle));
+                        param, out Unsafe.AsRef(in handle.Value)));
                 }
             }
             finally
@@ -81,24 +83,34 @@ namespace Microsoft.ML.Trainers.LightGbm
                         gcIndices[i].Free();
                 };
             }
+
             // Before adding examples (i.e., feature vectors of the original data set), the original labels, weights, and groups are added.
+            _handle = handle.Value;
             SetLabel(labels);
             SetWeights(weights);
             SetGroup(groups);
 
             Contracts.Assert(GetNumCols() == numCol);
             Contracts.Assert(GetNumRows() == numTotalRow);
+
+            // The value is already assigned, but now that we are returning from the constructor we need to call extract
+            // to ensure the value is not automatically disposed.
+            handle.Extract();
         }
 
         public Dataset(Dataset reference, int numTotalRow, float[] labels, float[] weights = null, int[] groups = null)
         {
-            WrappedLightGbmInterface.SafeDataSetHandle refHandle = reference?.Handle;
+            using LocalDisposable<WrappedLightGbmInterface.SafeDataSetHandle> handle = new LocalDisposable<WrappedLightGbmInterface.SafeDataSetHandle>(null);
+            LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.DatasetCreateByReference(reference?.Handle, numTotalRow, out Unsafe.AsRef(in handle.Value)));
 
-            LightGbmInterfaceUtils.Check(WrappedLightGbmInterface.DatasetCreateByReference(refHandle, numTotalRow, out _handle));
-
+            _handle = handle.Value;
             SetLabel(labels);
             SetWeights(weights);
             SetGroup(groups);
+
+            // The value is already assigned, but now that we are returning from the constructor we need to call extract
+            // to ensure the value is not automatically disposed.
+            handle.Extract();
         }
 
         public void Dispose()
