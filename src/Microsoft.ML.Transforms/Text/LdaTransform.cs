@@ -877,10 +877,11 @@ namespace Microsoft.ML.Transforms.Text
             // Initialize all LDA states
             for (int i = 0; i < columns.Length; i++)
             {
+                var state = new LdaState(env, columns[i], numVocabs[i]);
+
                 if (numDocArray[i] == 0 || corpusSize[i] == 0)
                     throw ch.Except("The specified documents are all empty in column '{0}'.", columns[i].InputColumnName);
 
-                var state = new LdaState(env, columns[i], numVocabs[i]);
                 state.AllocateDataMemory(numDocArray[i], corpusSize[i]);
                 states[i] = state;
             }
