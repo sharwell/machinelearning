@@ -4,6 +4,7 @@
 
 using System;
 using System.Globalization;
+using System.Threading.Tasks;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
 using Microsoft.ML.EntryPoints;
@@ -268,7 +269,7 @@ namespace Microsoft.ML.Trainers
             Info = new TrainerInfo(calibration: NeedCalibration, supportIncrementalTrain: true);
         }
 
-        private protected sealed override TModel TrainModelCore(TrainContext context)
+        private protected sealed override async Task<TModel> TrainModelCoreAsync(TrainContext context)
         {
             Host.CheckValue(context, nameof(context));
             var initPredictor = context.InitialPredictor;
@@ -302,8 +303,8 @@ namespace Microsoft.ML.Trainers
         /// <summary>
         /// Continues the training of a <see cref="OnlineLinearTrainer{TTransformer, TModel}"/> using an already trained <paramref name="modelParameters"/> and returns a <see cref="ITransformer"/>.
         /// </summary>
-        public TTransformer Fit(IDataView trainData, LinearModelParameters modelParameters)
-            => TrainTransformer(trainData, initPredictor: modelParameters);
+        public async Task<TTransformer> FitAsync(IDataView trainData, LinearModelParameters modelParameters)
+            => await TrainTransformerAsync(trainData, initPredictor: modelParameters);
 
         private protected abstract void CheckLabels(RoleMappedData data);
 

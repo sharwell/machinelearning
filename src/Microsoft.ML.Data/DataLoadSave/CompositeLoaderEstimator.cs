@@ -1,6 +1,8 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
+
+using System.Threading.Tasks;
 using Microsoft.ML.Runtime;
 
 namespace Microsoft.ML.Data
@@ -28,19 +30,19 @@ namespace Microsoft.ML.Data
             // GetOutputSchema();
         }
 
-        public CompositeDataLoader<TSource, TLastTransformer> Fit(TSource input)
+        public async ITask<CompositeDataLoader<TSource, TLastTransformer>> FitAsync(TSource input)
         {
-            var start = _start.Fit(input);
+            var start = await _start.FitAsync(input);
             var idv = start.Load(input);
 
-            var xfChain = _estimatorChain.Fit(idv);
+            var xfChain = await _estimatorChain.FitAsync(idv);
             return new CompositeDataLoader<TSource, TLastTransformer>(start, xfChain);
         }
 
-        public SchemaShape GetOutputSchema()
+        public async Task<SchemaShape> GetOutputSchemaAsync()
         {
-            var shape = _start.GetOutputSchema();
-            return _estimatorChain.GetOutputSchema(shape);
+            var shape = await _start.GetOutputSchemaAsync();
+            return await _estimatorChain.GetOutputSchemaAsync(shape);
         }
 
         /// <summary>

@@ -17,7 +17,7 @@ namespace Microsoft.ML.Transforms
 
         /// <summary>
         /// The input dataset. Used only in entry-point methods, since the normal API mechanism for feeding in a dataset to
-        /// create an <see cref="ITransformer"/> is to use the <see cref="IEstimator{TTransformer}.Fit(IDataView)"/> method.
+        /// create an <see cref="ITransformer"/> is to use the <see cref="IEstimator{TTransformer}.FitAsync(IDataView)"/> method.
         /// </summary>
         [BestFriend]
         [Argument(ArgumentType.Required, HelpText = "Input dataset", Visibility = ArgumentAttribute.VisibilityType.EntryPointsOnly, SortOrder = 1)]

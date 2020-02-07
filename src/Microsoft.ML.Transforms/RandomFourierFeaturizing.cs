@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -713,13 +714,13 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Trains and returns a <see cref="ApproximatedKernelTransformer"/>.
         /// </summary>
-        public ApproximatedKernelTransformer Fit(IDataView input) => new ApproximatedKernelTransformer(_host, input, _columns);
+        public async ITask<ApproximatedKernelTransformer> FitAsync(IDataView input) => new ApproximatedKernelTransformer(_host, input, _columns);
 
         /// <summary>
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var result = inputSchema.ToDictionary(x => x.Name);

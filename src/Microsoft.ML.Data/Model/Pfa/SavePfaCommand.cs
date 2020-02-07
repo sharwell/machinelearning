@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -90,11 +91,11 @@ namespace Microsoft.ML.Model.Pfa
             return new HashSet<string>(toDrop.Split(','));
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             using (var ch = Host.Start("Run"))
             {
-                Run(ch);
+                await RunAsync(ch);
             }
         }
 
@@ -118,7 +119,7 @@ namespace Microsoft.ML.Model.Pfa
             Host.AssertValue(source);
         }
 
-        private void Run(IChannel ch)
+        private async Task RunAsync(IChannel ch)
         {
             ILegacyDataLoader loader;
             IPredictor rawPred;
@@ -126,14 +127,14 @@ namespace Microsoft.ML.Model.Pfa
 
             if (string.IsNullOrEmpty(ImplOptions.InputModelFile))
             {
-                loader = CreateLoader();
+                loader = await CreateLoaderAsync();
                 rawPred = null;
                 trainSchema = null;
                 Host.CheckUserArg(ImplOptions.LoadPredictor != true, nameof(ImplOptions.LoadPredictor),
                     "Cannot be set to true unless " + nameof(ImplOptions.InputModelFile) + " is also specifified.");
             }
             else
-                LoadModelObjects(ch, _loadPredictor, out rawPred, true, out trainSchema, out loader);
+                (rawPred, trainSchema, loader) = await LoadModelObjectsAsync(ch, _loadPredictor, true);
 
             // Get the transform chain.
             IDataView source;
@@ -206,7 +207,7 @@ namespace Microsoft.ML.Model.Pfa
                 using (var file = Host.CreateOutputFile(_outputModelPath))
                 using (var stream = file.CreateWriteStream())
                 using (var writer = new StreamWriter(stream))
-                    writer.Write(pfaDoc.ToString(_formatting));
+                    await writer.WriteAsync(pfaDoc.ToString(_formatting));
             }
 
             if (!string.IsNullOrWhiteSpace(ImplOptions.OutputModelFile))

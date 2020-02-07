@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime;
 using Microsoft.ML.Transforms;
@@ -38,7 +39,7 @@ namespace Microsoft.ML
         /// <param name="data">The data view to use for preview</param>
         /// <param name="maxRows">Maximum number of rows to show in preview</param>
         /// <param name="maxTrainingRows">Maximum number of rows to fit the estimator</param>
-        public static DataDebuggerPreview Preview(this IEstimator<ITransformer> estimator, IDataView data, int maxRows = DataDebuggerPreview.Defaults.MaxRows,
+        public static async Task<DataDebuggerPreview> PreviewAsync(this IEstimator<ITransformer> estimator, IDataView data, int maxRows = DataDebuggerPreview.Defaults.MaxRows,
             int maxTrainingRows = DataDebuggerPreview.Defaults.MaxRows)
         {
             Contracts.CheckValue(estimator, nameof(estimator));
@@ -48,7 +49,7 @@ namespace Microsoft.ML
 
             var env = new LocalEnvironment();
             var trainData = SkipTakeFilter.Create(env, new SkipTakeFilter.TakeOptions { Count = maxTrainingRows }, data);
-            return new DataDebuggerPreview(estimator.Fit(trainData).Transform(data), maxRows);
+            return new DataDebuggerPreview((await estimator.FitAsync(trainData)).Transform(data), maxRows);
         }
 
         /// <summary>

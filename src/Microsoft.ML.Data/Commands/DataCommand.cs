@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data.IO;
@@ -104,7 +105,7 @@ namespace Microsoft.ML.Data
                 Host = impl.Host.Register(name);
             }
 
-            public abstract void Run();
+            public abstract Task RunAsync();
 
             protected virtual void SendTelemetry(IChannelProvider prov)
             {
@@ -212,9 +213,9 @@ namespace Microsoft.ML.Data
                     LoaderUtils.SaveLoader(loader, file);
             }
 
-            protected ILegacyDataLoader CreateAndSaveLoader(Func<IHostEnvironment, IMultiStreamSource, ILegacyDataLoader> defaultLoaderFactory = null)
+            protected async Task<ILegacyDataLoader> CreateAndSaveLoaderAsync(Func<IHostEnvironment, IMultiStreamSource, ILegacyDataLoader> defaultLoaderFactory = null)
             {
-                var loader = CreateLoader(defaultLoaderFactory);
+                var loader = await CreateLoaderAsync(defaultLoaderFactory);
                 if (!string.IsNullOrWhiteSpace(ImplOptions.OutputModelFile))
                 {
                     using (var file = Host.CreateOutputFile(ImplOptions.OutputModelFile))
@@ -232,23 +233,19 @@ namespace Microsoft.ML.Data
             /// <c>false</c> we will not even attempt to load a predictor. If <c>null</c> we will
             /// load the predictor, if present. If <c>true</c> we will load the predictor, or fail
             /// noisily if we cannot.</param>
-            /// <param name="predictor">The predictor in the model, or <c>null</c> if
-            /// <paramref name="wantPredictor"/> was false, or <paramref name="wantPredictor"/> was
-            /// <c>null</c> and no predictor was present.</param>
             /// <param name="wantTrainSchema">Whether we want the training schema. Unlike
             /// <paramref name="wantPredictor"/>, this has no "hard fail if not present" option. If
-            /// this is <c>true</c>, it is still possible for <paramref name="trainSchema"/> to remain
+            /// this is <c>true</c>, it is still possible for <c>trainSchema</c> to remain
             /// <c>null</c> if there were no role mappings, or pipeline.</param>
-            /// <param name="trainSchema">The training schema if <paramref name="wantTrainSchema"/>
-            /// is true, and there were role mappings stored in the model.</param>
-            /// <param name="pipe">The data pipe constructed from the combination of the
-            /// model and command line arguments.</param>
-            protected void LoadModelObjects(
+            protected async Task<(IPredictor predictor, RoleMappedSchema trainSchema, ILegacyDataLoader pipe)> LoadModelObjectsAsync(
                 IChannel ch,
-                bool? wantPredictor, out IPredictor predictor,
-                bool wantTrainSchema, out RoleMappedSchema trainSchema,
-                out ILegacyDataLoader pipe)
+                bool? wantPredictor,
+                bool wantTrainSchema)
             {
+                IPredictor predictor;
+                RoleMappedSchema trainSchema;
+                ILegacyDataLoader pipe;
+
                 // First handle the case where there is no input model file.
                 // Everything must come from the command line.
 
@@ -277,7 +274,7 @@ namespace Microsoft.ML.Data
                         if (ImplOptions.LoadTransforms == true)
                         {
                             Host.CheckUserArg(!string.IsNullOrWhiteSpace(ImplOptions.InputModelFile), nameof(ImplOptions.InputModelFile));
-                            pipe = LoadTransformChain(pipe);
+                            pipe = await LoadTransformChainAsync(pipe);
                         }
                     }
                     else
@@ -289,7 +286,7 @@ namespace Microsoft.ML.Data
                     }
 
                     if (Utils.Size(ImplOptions.Transforms) > 0)
-                        pipe = LegacyCompositeDataLoader.Create(Host, pipe, ImplOptions.Transforms);
+                        pipe = await LegacyCompositeDataLoader.CreateAsync(Host, pipe, ImplOptions.Transforms);
 
                     // Next consider loading the training data's role mapped schema.
                     trainSchema = null;
@@ -314,21 +311,23 @@ namespace Microsoft.ML.Data
                         // maintain backwards compatibility.
                     }
                 }
+
+                return (predictor, trainSchema, pipe);
             }
 
-            protected ILegacyDataLoader CreateLoader(Func<IHostEnvironment, IMultiStreamSource, ILegacyDataLoader> defaultLoaderFactory = null)
+            protected async Task<ILegacyDataLoader> CreateLoaderAsync(Func<IHostEnvironment, IMultiStreamSource, ILegacyDataLoader> defaultLoaderFactory = null)
             {
-                var loader = CreateRawLoader(defaultLoaderFactory);
-                loader = CreateTransformChain(loader);
+                var loader = await CreateRawLoaderAsync(defaultLoaderFactory);
+                loader = await CreateTransformChainAsync(loader);
                 return loader;
             }
 
-            private ILegacyDataLoader CreateTransformChain(ILegacyDataLoader loader)
+            private async Task<ILegacyDataLoader> CreateTransformChainAsync(ILegacyDataLoader loader)
             {
-                return LegacyCompositeDataLoader.Create(Host, loader, ImplOptions.Transforms);
+                return await LegacyCompositeDataLoader.CreateAsync(Host, loader, ImplOptions.Transforms);
             }
 
-            protected ILegacyDataLoader CreateRawLoader(
+            protected async Task<ILegacyDataLoader> CreateRawLoaderAsync(
                 Func<IHostEnvironment, IMultiStreamSource, ILegacyDataLoader> defaultLoaderFactory = null,
                 string dataFile = null)
             {
@@ -372,13 +371,13 @@ namespace Microsoft.ML.Data
                     if (ImplOptions.LoadTransforms == true)
                     {
                         Host.CheckUserArg(!string.IsNullOrWhiteSpace(ImplOptions.InputModelFile), nameof(ImplOptions.InputModelFile));
-                        loader = LoadTransformChain(loader);
+                        loader = await LoadTransformChainAsync(loader);
                     }
                 }
                 return loader;
             }
 
-            private ILegacyDataLoader LoadTransformChain(ILegacyDataLoader srcData)
+            private async Task<ILegacyDataLoader> LoadTransformChainAsync(ILegacyDataLoader srcData)
             {
                 Host.Assert(!string.IsNullOrWhiteSpace(ImplOptions.InputModelFile));
 
@@ -387,7 +386,7 @@ namespace Microsoft.ML.Data
                 using (var rep = RepositoryReader.Open(strm, Host))
                 using (var pipeLoaderEntry = rep.OpenEntry(ModelFileUtils.DirDataLoaderModel, ModelLoadContext.ModelStreamName))
                 using (var ctx = new ModelLoadContext(rep, pipeLoaderEntry, ModelFileUtils.DirDataLoaderModel))
-                    return LegacyCompositeDataLoader.Create(Host, ctx, srcData, x => true);
+                    return await LegacyCompositeDataLoader.CreateAsync(Host, ctx, srcData, x => true);
             }
         }
     }

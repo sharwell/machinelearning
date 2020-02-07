@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
+
 namespace Microsoft.ML.Data
 {
     /// <summary>
@@ -17,8 +19,8 @@ namespace Microsoft.ML.Data
             Loader = loader;
         }
 
-        public TLoader Fit(TSource input) => Loader;
+        public async ITask<TLoader> FitAsync(TSource input) => Loader;
 
-        public SchemaShape GetOutputSchema() => SchemaShape.Create(Loader.GetOutputSchema());
+        public async Task<SchemaShape> GetOutputSchemaAsync() => SchemaShape.Create(Loader.GetOutputSchema());
     }
 }

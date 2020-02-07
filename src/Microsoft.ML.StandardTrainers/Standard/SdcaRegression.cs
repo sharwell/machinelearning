@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -211,14 +212,14 @@ namespace Microsoft.ML.Trainers
             Desc = SdcaRegressionTrainer.Summary,
             UserName = SdcaRegressionTrainer.UserNameValue,
             ShortName = SdcaRegressionTrainer.ShortName)]
-        public static CommonOutputs.RegressionOutput TrainRegression(IHostEnvironment env, SdcaRegressionTrainer.Options input)
+        public static async Task<CommonOutputs.RegressionOutput> TrainRegressionAsync(IHostEnvironment env, SdcaRegressionTrainer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainSDCA");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<SdcaRegressionTrainer.Options, CommonOutputs.RegressionOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<SdcaRegressionTrainer.Options, CommonOutputs.RegressionOutput>(host, input,
                 () => new SdcaRegressionTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName));
         }

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -91,7 +92,7 @@ namespace Microsoft.ML.Transforms
 
         internal const string UserName = "Categorical Transform";
 
-        internal static IDataTransform Create(IHostEnvironment env, Options options, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register("Categorical");
@@ -118,18 +119,27 @@ namespace Microsoft.ML.Transforms
                     keyData = ValueToKeyMappingTransformer.GetKeyDataViewOrNull(env, ch, options.DataFile, options.TermsColumn, options.Loader, out bool autoLoaded);
                 h.AssertValue(keyData);
             }
-            var transformed = new OneHotEncodingEstimator(env, columns.ToArray(), keyData).Fit(input).Transform(input);
+            var transformed = (await new OneHotEncodingEstimator(env, columns.ToArray(), keyData).FitAsync(input)).Transform(input);
             return (IDataTransform)transformed;
         }
 
         private readonly TransformerChain<ITransformer> _transformer;
 
-        internal OneHotEncodingTransformer(ValueToKeyMappingEstimator term, IEstimator<ITransformer> toVector, IDataView input)
+        private OneHotEncodingTransformer(TransformerChain<ITransformer> transformer)
         {
+            _transformer = transformer;
+        }
+
+        internal static async Task<OneHotEncodingTransformer> CreateAsync(ValueToKeyMappingEstimator term, IEstimator<ITransformer> toVector, IDataView input)
+        {
+            TransformerChain<ITransformer> transformer;
+
             if (toVector != null)
-                _transformer = term.Append(toVector).Fit(input);
+                transformer = await term.Append(toVector).FitAsync(input);
             else
-                _transformer = new TransformerChain<ITransformer>(term.Fit(input));
+                transformer = new TransformerChain<ITransformer>(await term.FitAsync(input));
+
+            return new OneHotEncodingTransformer(transformer);
         }
 
         public DataViewSchema GetOutputSchema(DataViewSchema inputSchema) => _transformer.GetOutputSchema(inputSchema);
@@ -325,18 +335,18 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             if (_toSomething != null)
-                return _term.Append(_toSomething).GetOutputSchema(inputSchema);
+                return await _term.Append(_toSomething).GetOutputSchemaAsync(inputSchema);
             else
-                return _term.GetOutputSchema(inputSchema);
+                return await _term.GetOutputSchemaAsync(inputSchema);
         }
 
         /// <summary>
         /// Trains and returns a <see cref="OneHotEncodingTransformer"/>.
         /// </summary>
-        public OneHotEncodingTransformer Fit(IDataView input) => new OneHotEncodingTransformer(_term, _toSomething, input);
+        public async ITask<OneHotEncodingTransformer> FitAsync(IDataView input) => await OneHotEncodingTransformer.CreateAsync(_term, _toSomething, input);
 
         [BestFriend]
         internal void WrapTermWithDelegate(Action<ValueToKeyMappingTransformer> onFit)
@@ -350,28 +360,28 @@ namespace Microsoft.ML.Transforms
         [TlcModule.EntryPoint(Name = "Transforms.CategoricalOneHotVectorizer",
             Desc = OneHotEncodingTransformer.Summary,
             UserName = OneHotEncodingTransformer.UserName)]
-        public static CommonOutputs.TransformOutput CatTransformDict(IHostEnvironment env, OneHotEncodingTransformer.Options input)
+        public static async Task<CommonOutputs.TransformOutput> CatTransformDictAsync(IHostEnvironment env, OneHotEncodingTransformer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("CatTransformDict");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = OneHotEncodingTransformer.Create(host, input, input.Data);
+            var xf = await OneHotEncodingTransformer.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 
         [TlcModule.EntryPoint(Name = "Transforms.CategoricalHashOneHotVectorizer",
             Desc = OneHotHashEncodingTransformer.Summary,
             UserName = OneHotHashEncodingTransformer.UserName)]
-        public static CommonOutputs.TransformOutput CatTransformHash(IHostEnvironment env, OneHotHashEncodingTransformer.Options input)
+        public static async Task<CommonOutputs.TransformOutput> CatTransformHashAsync(IHostEnvironment env, OneHotHashEncodingTransformer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("CatTransformDict");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = OneHotHashEncodingTransformer.Create(host, input, input.Data);
+            var xf = await OneHotHashEncodingTransformer.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 

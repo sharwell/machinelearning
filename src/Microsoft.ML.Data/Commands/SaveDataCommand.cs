@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -46,16 +47,16 @@ namespace Microsoft.ML.Data
             Utils.CheckOptionalUserDirectory(args.OutputDataFile, nameof(args.OutputDataFile));
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             string command = "SaveData";
             using (var ch = Host.Start(command))
             {
-                RunCore(ch);
+                await RunCoreAsync(ch);
             }
         }
 
-        private void RunCore(IChannel ch)
+        private async Task RunCoreAsync(IChannel ch)
         {
             Host.AssertValue(ch, "ch");
             IDataSaver saver;
@@ -82,7 +83,7 @@ namespace Microsoft.ML.Data
                 saver = ImplOptions.Saver.CreateComponent(Host);
             }
 
-            ILegacyDataLoader loader = CreateAndSaveLoader();
+            ILegacyDataLoader loader = await CreateAndSaveLoaderAsync();
             using (var file = Host.CreateOutputFile(ImplOptions.OutputDataFile))
                 DataSaverUtils.SaveDataView(ch, saver, loader, file, ImplOptions.KeepHidden);
         }
@@ -115,19 +116,19 @@ namespace Microsoft.ML.Data
         {
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             string command = "ShowData";
             using (var ch = Host.Start(command))
             {
-                RunCore(ch);
+                await RunCoreAsync(ch);
             }
         }
 
-        private void RunCore(IChannel ch)
+        private async Task RunCoreAsync(IChannel ch)
         {
             Host.AssertValue(ch);
-            IDataView data = CreateAndSaveLoader();
+            IDataView data = await CreateAndSaveLoaderAsync();
 
             if (!string.IsNullOrWhiteSpace(ImplOptions.Columns))
             {
@@ -174,7 +175,7 @@ namespace Microsoft.ML.Data
                     mem.Seek(0, SeekOrigin.Begin);
                     using (StreamReader reader = new StreamReader(mem))
                     {
-                        string result = reader.ReadToEnd();
+                        string result = await reader.ReadToEndAsync();
                         ch.Info(MessageSensitivity.UserData | MessageSensitivity.Schema, result);
                     }
                 }

@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime;
@@ -27,7 +28,7 @@ namespace Microsoft.ML.Trainers
         private static readonly TrainerInfo _info = new TrainerInfo();
         public override TrainerInfo Info => _info;
 
-        private protected override TModel TrainModelCore(TrainContext context)
+        private protected override async Task<TModel> TrainModelCoreAsync(TrainContext context)
         {
             Host.CheckValue(context, nameof(context));
             using (var ch = Host.Start("Training"))

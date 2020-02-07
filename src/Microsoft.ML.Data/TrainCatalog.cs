@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime;
@@ -85,7 +86,7 @@ namespace Microsoft.ML
         /// Return each model and each scored test dataset.
         /// </summary>
         [BestFriend]
-        private protected CrossValidationResult[] CrossValidateTrain(IDataView data, IEstimator<ITransformer> estimator,
+        private protected async Task<CrossValidationResult[]> CrossValidateTrainAsync(IDataView data, IEstimator<ITransformer> estimator,
             int numFolds, string samplingKeyColumn, int? seed = null)
         {
             Environment.CheckValue(data, nameof(data));
@@ -93,7 +94,7 @@ namespace Microsoft.ML
             Environment.CheckParam(numFolds > 1, nameof(numFolds), "Must be more than 1");
             Environment.CheckValueOrNull(samplingKeyColumn);
 
-            DataOperationsCatalog.EnsureGroupPreservationColumn(Environment, ref data, ref samplingKeyColumn, seed);
+            (data, samplingKeyColumn) = await DataOperationsCatalog.EnsureGroupPreservationColumnAsync(Environment, data, samplingKeyColumn, seed);
             var result = new CrossValidationResult[numFolds];
             int fold = 0;
             // Sequential per-fold training.
@@ -101,7 +102,7 @@ namespace Microsoft.ML
             // spawn off a separate host per fold in that case.
             foreach (var split in DataOperationsCatalog.CrossValidationSplit(Environment, data, numFolds, samplingKeyColumn))
             {
-                var model = estimator.Fit(split.TrainSet);
+                var model = await estimator.FitAsync(split.TrainSet);
                 var scoredTest = model.Transform(split.TestSet);
                 result[fold] = new CrossValidationResult(model, scoredTest, fold);
                 fold++;
@@ -224,12 +225,12 @@ namespace Microsoft.ML
         /// If <see langword="null"/> no row grouping will be performed.</param>
         /// <param name="seed">Seed for the random number generator used to select rows for cross-validation folds.</param>
         /// <returns>Per-fold results: metrics, models, scored datasets.</returns>
-        public IReadOnlyList<CrossValidationResult<BinaryClassificationMetrics>> CrossValidateNonCalibrated(
+        public async Task<IReadOnlyList<CrossValidationResult<BinaryClassificationMetrics>>> CrossValidateNonCalibratedAsync(
             IDataView data, IEstimator<ITransformer> estimator, int numberOfFolds = 5, string labelColumnName = DefaultColumnNames.Label,
             string samplingKeyColumnName = null, int? seed = null)
         {
             Environment.CheckNonEmpty(labelColumnName, nameof(labelColumnName));
-            var result = CrossValidateTrain(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
+            var result = await CrossValidateTrainAsync(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
             return result.Select(x => new CrossValidationResult<BinaryClassificationMetrics>(x.Model,
                 EvaluateNonCalibrated(x.Scores, labelColumnName), x.Scores, x.Fold)).ToArray();
         }
@@ -248,12 +249,12 @@ namespace Microsoft.ML
         /// If <see langword="null"/> no row grouping will be performed.</param>
         /// <param name="seed">Seed for the random number generator used to select rows for cross-validation folds.</param>
         /// <returns>Per-fold results: metrics, models, scored datasets.</returns>
-        public IReadOnlyList<CrossValidationResult<CalibratedBinaryClassificationMetrics>> CrossValidate(
+        public async Task<IReadOnlyList<CrossValidationResult<CalibratedBinaryClassificationMetrics>>> CrossValidateAsync(
             IDataView data, IEstimator<ITransformer> estimator, int numberOfFolds = 5, string labelColumnName = DefaultColumnNames.Label,
             string samplingKeyColumnName = null, int? seed = null)
         {
             Environment.CheckNonEmpty(labelColumnName, nameof(labelColumnName));
-            var result = CrossValidateTrain(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
+            var result = await CrossValidateTrainAsync(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
             return result.Select(x => new CrossValidationResult<CalibratedBinaryClassificationMetrics>(x.Model,
                 Evaluate(x.Scores, labelColumnName), x.Scores, x.Fold)).ToArray();
         }
@@ -447,11 +448,11 @@ namespace Microsoft.ML
         /// they are guaranteed to appear in the same subset (train or test). This can be used to ensure no label leakage from the train to the test set.
         /// If <see langword="null"/> no row grouping will be performed.</param>
         /// <param name="seed">Seed for the random number generator used to select rows for cross-validation folds.</param>
-        public IReadOnlyList<CrossValidationResult<ClusteringMetrics>> CrossValidate(
+        public async Task<IReadOnlyList<CrossValidationResult<ClusteringMetrics>>> CrossValidateAsync(
             IDataView data, IEstimator<ITransformer> estimator, int numberOfFolds = 5, string labelColumnName = null, string featuresColumnName = null,
             string samplingKeyColumnName = null, int? seed = null)
         {
-            var result = CrossValidateTrain(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
+            var result = await CrossValidateTrainAsync(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
             return result.Select(x => new CrossValidationResult<ClusteringMetrics>(x.Model,
                 Evaluate(x.Scores, labelColumnName: labelColumnName, featureColumnName: featuresColumnName), x.Scores, x.Fold)).ToArray();
         }
@@ -527,12 +528,12 @@ namespace Microsoft.ML
         /// <param name="seed">Seed for the random number generator used to select rows for cross-validation folds.</param>
         /// <returns>Per-fold results: metrics, models, scored datasets.</returns>
         /// <returns>Per-fold results: metrics, models, scored datasets.</returns>
-        public IReadOnlyList<CrossValidationResult<MulticlassClassificationMetrics>> CrossValidate(
+        public async Task<IReadOnlyList<CrossValidationResult<MulticlassClassificationMetrics>>> CrossValidate(
             IDataView data, IEstimator<ITransformer> estimator, int numberOfFolds = 5, string labelColumnName = DefaultColumnNames.Label,
             string samplingKeyColumnName = null, int? seed = null)
         {
             Environment.CheckNonEmpty(labelColumnName, nameof(labelColumnName));
-            var result = CrossValidateTrain(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
+            var result = await CrossValidateTrainAsync(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
             return result.Select(x => new CrossValidationResult<MulticlassClassificationMetrics>(x.Model,
                 Evaluate(x.Scores, labelColumnName), x.Scores, x.Fold)).ToArray();
         }
@@ -597,12 +598,12 @@ namespace Microsoft.ML
         /// If <see langword="null"/> no row grouping will be performed.</param>
         /// <param name="seed">Seed for the random number generator used to select rows for cross-validation folds.</param>
         /// <returns>Per-fold results: metrics, models, scored datasets.</returns>
-        public IReadOnlyList<CrossValidationResult<RegressionMetrics>> CrossValidate(
+        public async Task<IReadOnlyList<CrossValidationResult<RegressionMetrics>>> CrossValidateAsync(
             IDataView data, IEstimator<ITransformer> estimator, int numberOfFolds = 5, string labelColumnName = DefaultColumnNames.Label,
             string samplingKeyColumnName = null, int? seed = null)
         {
             Environment.CheckNonEmpty(labelColumnName, nameof(labelColumnName));
-            var result = CrossValidateTrain(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
+            var result = await CrossValidateTrainAsync(data, estimator, numberOfFolds, samplingKeyColumnName, seed);
             return result.Select(x => new CrossValidationResult<RegressionMetrics>(x.Model,
                 Evaluate(x.Scores, labelColumnName), x.Scores, x.Fold)).ToArray();
         }

@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -85,7 +86,7 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public sealed override SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public sealed override async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             Host.CheckValue(inputSchema, nameof(inputSchema));
 

@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.EntryPoints;
 using Microsoft.ML.Runtime;
@@ -21,10 +22,10 @@ namespace Microsoft.ML.Transforms.Text
             Desc = TextFeaturizingEstimator.Summary,
             UserName = TextFeaturizingEstimator.UserName,
             ShortName = TextFeaturizingEstimator.LoaderSignature)]
-        public static CommonOutputs.TransformOutput TextTransform(IHostEnvironment env, TextFeaturizingEstimator.Options input)
+        public static async Task<CommonOutputs.TransformOutput> TextTransformAsync(IHostEnvironment env, TextFeaturizingEstimator.Options input)
         {
             var h = EntryPointUtils.CheckArgsAndCreateHost(env, "FeaturizeTextEstimator", input);
-            var xf = TextFeaturizingEstimator.Create(h, input, input.Data);
+            var xf = await TextFeaturizingEstimator.CreateAsync(h, input, input.Data);
             return new CommonOutputs.TransformOutput()
             {
                 Model = new TransformModelImpl(h, xf, input.Data),
@@ -114,7 +115,7 @@ namespace Microsoft.ML.Transforms.Text
             Desc = LatentDirichletAllocationTransformer.Summary,
             UserName = LatentDirichletAllocationTransformer.UserName,
             ShortName = LatentDirichletAllocationTransformer.ShortName)]
-        public static CommonOutputs.TransformOutput LightLda(IHostEnvironment env, LatentDirichletAllocationTransformer.Options input)
+        public static async Task<CommonOutputs.TransformOutput> LightLdaAsync(IHostEnvironment env, LatentDirichletAllocationTransformer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(input, nameof(input));
@@ -122,7 +123,7 @@ namespace Microsoft.ML.Transforms.Text
             var h = EntryPointUtils.CheckArgsAndCreateHost(env, "LightLda", input);
             var cols = input.Columns.Select(colPair => new LatentDirichletAllocationEstimator.ColumnOptions(colPair, input)).ToArray();
             var est = new LatentDirichletAllocationEstimator(h, cols);
-            var view = est.Fit(input.Data).Transform(input.Data);
+            var view = (await est.FitAsync(input.Data)).Transform(input.Data);
 
             return new CommonOutputs.TransformOutput()
             {

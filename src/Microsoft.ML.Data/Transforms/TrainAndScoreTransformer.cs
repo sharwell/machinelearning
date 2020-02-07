@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
@@ -174,7 +175,7 @@ namespace Microsoft.ML.Transforms
         /// <param name="featureColumn">Role name for features.</param>
         /// <param name="labelColumn">Role name for label.</param>
         /// <param name="groupColumn">Role name for the group column.</param>
-        internal static IDataTransform Create(IHostEnvironment env,
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env,
             IDataView input,
             ITrainer trainer,
             string featureColumn = DefaultColumnNames.Features,
@@ -195,11 +196,11 @@ namespace Microsoft.ML.Transforms
                 GroupColumn = groupColumn
             };
 
-            return Create(env, args, trainer, input, null);
+            return await CreateAsync(env, args, trainer, input, null);
         }
 
         // Factory method for SignatureDataTransform.
-        private static IDataTransform Create(IHostEnvironment env, Arguments args, IDataView input)
+        private static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Arguments args, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(args, nameof(args));
@@ -207,11 +208,11 @@ namespace Microsoft.ML.Transforms
                 "Trainer cannot be null. If your model is already trained, please use ScoreTransform instead.");
             env.CheckValue(input, nameof(input));
 
-            return Create(env, args, args.Trainer.CreateComponent(env), input, null);
+            return await CreateAsync(env, args, args.Trainer.CreateComponent(env), input, null);
         }
 
         [BestFriend]
-        internal static IDataTransform Create(IHostEnvironment env, Arguments args, IDataView input, IComponentFactory<IPredictor, ISchemaBindableMapper> mapperFactory)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Arguments args, IDataView input, IComponentFactory<IPredictor, ISchemaBindableMapper> mapperFactory)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(args, nameof(args));
@@ -220,10 +221,10 @@ namespace Microsoft.ML.Transforms
             env.CheckValue(input, nameof(input));
             env.CheckValueOrNull(mapperFactory);
 
-            return Create(env, args, args.Trainer.CreateComponent(env), input, mapperFactory);
+            return await CreateAsync(env, args, args.Trainer.CreateComponent(env), input, mapperFactory);
         }
 
-        private static IDataTransform Create(IHostEnvironment env, Arguments args, ITrainer trainer, IDataView input, IComponentFactory<IPredictor, ISchemaBindableMapper> mapperFactory)
+        private static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Arguments args, ITrainer trainer, IDataView input, IComponentFactory<IPredictor, ISchemaBindableMapper> mapperFactory)
         {
             Contracts.AssertValue(env, nameof(env));
             env.AssertValue(args, nameof(args));
@@ -239,7 +240,7 @@ namespace Microsoft.ML.Transforms
                 string feat;
                 string group;
                 var data = CreateDataFromArgs(ch, input, args, out feat, out group);
-                var predictor = TrainUtils.Train(host, ch, data, trainer, null,
+                var predictor = await TrainUtils.TrainAsync(host, ch, data, trainer, null,
                     args.Calibrator, args.MaxCalibrationExamples, null);
 
                 return ScoreUtils.GetScorer(args.Scorer, predictor, input, feat, group, customCols, env, data.Schema, mapperFactory);

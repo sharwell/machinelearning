@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
 using Microsoft.ML.Data.DataLoadSave;
 using Microsoft.ML.Runtime;
 
@@ -71,14 +72,14 @@ namespace Microsoft.ML.Data
             Host = host;
         }
 
-        public abstract TransformWrapper Fit(IDataView input);
+        public abstract ITask<TransformWrapper> FitAsync(IDataView input);
 
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             Host.CheckValue(inputSchema, nameof(inputSchema));
 
             var fakeSchema = FakeSchemaFactory.Create(inputSchema);
-            var transformer = Fit(new EmptyDataView(Host, fakeSchema));
+            var transformer = await FitAsync(new EmptyDataView(Host, fakeSchema));
             return SchemaShape.Create(transformer.GetOutputSchema(fakeSchema));
         }
     }

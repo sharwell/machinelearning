@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.EntryPoints;
@@ -77,50 +78,50 @@ namespace Microsoft.ML.Data
     internal static class Normalize
     {
         [TlcModule.EntryPoint(Name = "Transforms.MinMaxNormalizer", Desc = NormalizeTransform.MinMaxNormalizerSummary, UserName = NormalizeTransform.MinMaxNormalizerUserName, ShortName = NormalizeTransform.MinMaxNormalizerShortName)]
-        public static CommonOutputs.TransformOutput MinMax(IHostEnvironment env, NormalizeTransform.MinMaxArguments input)
+        public static async Task<CommonOutputs.TransformOutput> MinMaxAsync(IHostEnvironment env, NormalizeTransform.MinMaxArguments input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("MinMax");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = NormalizeTransform.Create(host, input, input.Data);
+            var xf = await NormalizeTransform.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 
         [TlcModule.EntryPoint(Name = "Transforms.MeanVarianceNormalizer", Desc = NormalizeTransform.MeanVarNormalizerSummary, UserName = NormalizeTransform.MeanVarNormalizerUserName, ShortName = NormalizeTransform.MeanVarNormalizerShortName)]
-        public static CommonOutputs.TransformOutput MeanVar(IHostEnvironment env, NormalizeTransform.MeanVarArguments input)
+        public static async Task<CommonOutputs.TransformOutput> MeanVarAsync(IHostEnvironment env, NormalizeTransform.MeanVarArguments input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("MeanVar");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = NormalizeTransform.Create(host, input, input.Data);
+            var xf = await NormalizeTransform.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 
         [TlcModule.EntryPoint(Name = "Transforms.LogMeanVarianceNormalizer", Desc = NormalizeTransform.LogMeanVarNormalizerSummary, UserName = NormalizeTransform.LogMeanVarNormalizerUserName, ShortName = NormalizeTransform.LogMeanVarNormalizerShortName)]
-        public static CommonOutputs.TransformOutput LogMeanVar(IHostEnvironment env, NormalizeTransform.LogMeanVarArguments input)
+        public static async Task<CommonOutputs.TransformOutput> LogMeanVarAsync(IHostEnvironment env, NormalizeTransform.LogMeanVarArguments input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("LogMeanVar");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = NormalizeTransform.Create(host, input, input.Data);
+            var xf = await NormalizeTransform.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 
         [TlcModule.EntryPoint(Name = "Transforms.BinNormalizer", Desc = NormalizeTransform.BinNormalizerSummary, UserName = NormalizeTransform.BinNormalizerUserName, ShortName = NormalizeTransform.BinNormalizerShortName)]
-        public static CommonOutputs.TransformOutput Bin(IHostEnvironment env, NormalizeTransform.BinArguments input)
+        public static async Task<CommonOutputs.TransformOutput> BinAsync(IHostEnvironment env, NormalizeTransform.BinArguments input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("Bin");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = NormalizeTransform.Create(host, input, input.Data);
+            var xf = await NormalizeTransform.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 

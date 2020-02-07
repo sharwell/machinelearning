@@ -118,7 +118,7 @@ namespace Microsoft.ML.Data
         {
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             using (var ch = Host.Start(LoadName))
             using (var server = InitServer(ch))
@@ -131,7 +131,7 @@ namespace Microsoft.ML.Data
 
                 using (new TimerScope(Host, ch))
                 {
-                    RunCore(ch, cmd);
+                    await RunCoreAsync(ch, cmd);
                 }
             }
         }
@@ -142,7 +142,7 @@ namespace Microsoft.ML.Data
             base.SendTelemetryCore(pipe);
         }
 
-        private void RunCore(IChannel ch, string cmd)
+        private async Task RunCoreAsync(IChannel ch, string cmd)
         {
             Host.AssertValue(ch);
 
@@ -151,7 +151,7 @@ namespace Microsoft.ML.Data
                 ch.Warning("No input model file specified or model file did not contain a predictor. The model state cannot be initialized.");
 
             ch.Trace("Constructing data pipeline");
-            ILegacyDataLoader loader = CreateRawLoader();
+            ILegacyDataLoader loader = await CreateRawLoaderAsync();
 
             // If the per-instance results are requested and there is no name column, add a GenerateNumberTransform.
             var preXf = ImplOptions.PreTransforms;
@@ -175,58 +175,57 @@ namespace Microsoft.ML.Data
                         }).ToArray();
                 }
             }
-            loader = LegacyCompositeDataLoader.Create(Host, loader, preXf);
+            loader = await LegacyCompositeDataLoader.CreateAsync(Host, loader, preXf);
 
             ch.Trace("Binding label and features columns");
 
-            IDataView pipe = loader;
-            var stratificationColumn = GetSplitColumn(ch, loader, ref pipe);
+            var (stratificationColumn, pipe) = await GetSplitColumnAsync(ch, loader);
             var scorer = ImplOptions.Scorer;
             var evaluator = ImplOptions.Evaluator;
 
-            Func<IDataView> validDataCreator = null;
+            Func<Task<IDataView>> validDataCreatorAsync = null;
             if (ImplOptions.ValidationFile != null)
             {
-                validDataCreator =
-                    () =>
+                validDataCreatorAsync =
+                    async () =>
                     {
                         // Fork the command.
                         var impl = new CrossValidationCommand(this);
-                        return impl.CreateRawLoader(dataFile: ImplOptions.ValidationFile);
+                        return await impl.CreateRawLoaderAsync(dataFile: ImplOptions.ValidationFile);
                     };
             }
 
             FoldHelper fold = new FoldHelper(Host, RegistrationName, pipe, stratificationColumn,
-                ImplOptions, CreateRoleMappedData, ApplyAllTransformsToData, scorer, evaluator,
-                validDataCreator, ApplyAllTransformsToData, inputPredictor, cmd, loader, !string.IsNullOrEmpty(ImplOptions.OutputDataFile));
-            var tasks = fold.GetCrossValidationTasks();
+                ImplOptions, CreateRoleMappedDataAsync, ApplyAllTransformsToData, scorer, evaluator,
+                validDataCreatorAsync, ApplyAllTransformsToData, inputPredictor, cmd, loader, !string.IsNullOrEmpty(ImplOptions.OutputDataFile));
+            var tasks = await fold.GetCrossValidationTasksAsync();
 
             var eval = evaluator?.CreateComponent(Host) ??
-                EvaluateUtils.GetEvaluator(Host, tasks[0].Result.ScoreSchema);
+                EvaluateUtils.GetEvaluator(Host, tasks[0].ScoreSchema);
 
             // Print confusion matrix and fold results for each fold.
             for (int i = 0; i < tasks.Length; i++)
             {
-                var dict = tasks[i].Result.Metrics;
+                var dict = tasks[i].Metrics;
                 MetricWriter.PrintWarnings(ch, dict);
                 eval.PrintFoldResults(ch, dict);
             }
 
             // Print the overall results.
-            if (!TryGetOverallMetrics(tasks.Select(t => t.Result.Metrics).ToArray(), out var overallList))
+            if (!TryGetOverallMetrics(tasks.Select(t => t.Metrics).ToArray(), out var overallList))
                 throw ch.Except("No overall metrics found");
 
             var overall = eval.GetOverallResults(overallList.ToArray());
             MetricWriter.PrintOverallMetrics(Host, ch, ImplOptions.SummaryFilename, overall, ImplOptions.NumFolds);
-            eval.PrintAdditionalMetrics(ch, tasks.Select(t => t.Result.Metrics).ToArray());
-            Dictionary<string, IDataView>[] metricValues = tasks.Select(t => t.Result.Metrics).ToArray();
+            eval.PrintAdditionalMetrics(ch, tasks.Select(t => t.Metrics).ToArray());
+            Dictionary<string, IDataView>[] metricValues = tasks.Select(t => t.Metrics).ToArray();
             SendTelemetryMetric(metricValues);
 
             // Save the per-instance results.
             if (!string.IsNullOrWhiteSpace(ImplOptions.OutputDataFile))
             {
                 var perInstance = EvaluateUtils.ConcatenatePerInstanceDataViews(Host, eval, ImplOptions.CollateMetrics,
-                    ImplOptions.OutputExampleFoldIndex, tasks.Select(t => t.Result.PerInstanceResults).ToArray(), out var variableSizeVectorColumnNames);
+                    ImplOptions.OutputExampleFoldIndex, tasks.Select(t => t.PerInstanceResults).ToArray(), out var variableSizeVectorColumnNames);
                 if (variableSizeVectorColumnNames.Length > 0)
                 {
                     ch.Warning("Detected columns of variable length: {0}. Consider setting collateMetrics- for meaningful per-Folds results.",
@@ -262,7 +261,7 @@ namespace Microsoft.ML.Data
         /// <summary>
         /// Callback from the CV method to apply the transforms to the train data.
         /// </summary>
-        private RoleMappedData CreateRoleMappedData(IHostEnvironment env, IChannel ch, IDataView data, ITrainer trainer)
+        private async Task<RoleMappedData> CreateRoleMappedDataAsync(IHostEnvironment env, IChannel ch, IDataView data, ITrainer trainer)
         {
             foreach (var kvp in ImplOptions.Transforms)
                 data = kvp.Value.CreateComponent(env, data);
@@ -274,7 +273,7 @@ namespace Microsoft.ML.Data
             string name = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(ImplOptions.NameColumn), ImplOptions.NameColumn, DefaultColumnNames.Name);
             string group = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(ImplOptions.GroupColumn), ImplOptions.GroupColumn, DefaultColumnNames.GroupId);
 
-            TrainUtils.AddNormalizerIfNeeded(env, ch, trainer, ref data, features, ImplOptions.NormalizeFeatures);
+            (_, data) = await TrainUtils.AddNormalizerIfNeededAsync(env, ch, trainer, data, features, ImplOptions.NormalizeFeatures);
 
             // Training pipe and examples.
             var customCols = TrainUtils.CheckAndGenerateCustomColumns(ch, ImplOptions.CustomColumns);
@@ -282,11 +281,11 @@ namespace Microsoft.ML.Data
             return new RoleMappedData(data, label, features, group, weight, name, customCols);
         }
 
-        private string GetSplitColumn(IChannel ch, IDataView input, ref IDataView output)
+        private async Task<(string, IDataView)> GetSplitColumnAsync(IChannel ch, IDataView input)
         {
             // The stratification column and/or group column, if they exist at all, must be present at this point.
             var schema = input.Schema;
-            output = input;
+            var output = input;
             // If no stratification column was specified, but we have a group column of type Single, Double or
             // Key (contiguous) use it.
             string stratificationColumn = null;
@@ -332,11 +331,11 @@ namespace Microsoft.ML.Data
                     int inc = 0;
                     while (input.Schema.TryGetColumnIndex(stratificationColumn, out tmp))
                         stratificationColumn = string.Format("{0}_{1:000}", origStratCol, ++inc);
-                    output = new HashingEstimator(Host, origStratCol, stratificationColumn, 30).Fit(input).Transform(input);
+                    output = (await new HashingEstimator(Host, origStratCol, stratificationColumn, 30).FitAsync(input)).Transform(input);
                 }
             }
 
-            return stratificationColumn;
+            return (stratificationColumn, output);
         }
 
         private bool TryGetOverallMetrics(Dictionary<string, IDataView>[] metrics, out List<IDataView> overallList)
@@ -390,9 +389,9 @@ namespace Microsoft.ML.Data
             private readonly string _outputModelFile;
             private readonly ILegacyDataLoader _loader;
             private readonly bool _savePerInstance;
-            private readonly Func<IHostEnvironment, IChannel, IDataView, ITrainer, RoleMappedData> _createExamples;
+            private readonly Func<IHostEnvironment, IChannel, IDataView, ITrainer, Task<RoleMappedData>> _createExamplesAsync;
             private readonly Func<IHostEnvironment, IChannel, IDataView, RoleMappedData, IDataView, RoleMappedData> _applyTransformsToTestData;
-            private readonly Func<IDataView> _getValidationDataView;
+            private readonly Func<Task<IDataView>> _getValidationDataViewAsync;
             private readonly Func<IHostEnvironment, IChannel, IDataView, RoleMappedData, IDataView, RoleMappedData> _applyTransformsToValidationData;
 
             /// <param name="env">The environment.</param>
@@ -400,11 +399,11 @@ namespace Microsoft.ML.Data
             /// <param name="inputDataView">The input data view.</param>
             /// <param name="splitColumn">The column to use for splitting data into folds.</param>
             /// <param name="args">Cross validation arguments.</param>
-            /// <param name="createExamples">The delegate to create RoleMappedData</param>
+            /// <param name="createExamplesAsync">The delegate to create RoleMappedData</param>
             /// <param name="applyTransformsToTestData">The delegate to apply the transforms from the train pipeline to the test data</param>
             /// <param name="scorer">The scorer</param>
             /// <param name="evaluator">The evaluator</param>
-            /// <param name="getValidationDataView">The delegate to create validation data view</param>
+            /// <param name="getValidationDataViewAsync">The delegate to create validation data view</param>
             /// <param name="applyTransformsToValidationData">The delegate to apply the transforms from the train pipeline to the validation data</param>
             /// <param name="inputPredictor">The input predictor, for the continue training option</param>
             /// <param name="cmd">The command string.</param>
@@ -412,35 +411,35 @@ namespace Microsoft.ML.Data
             /// <param name="savePerInstance">Whether to produce the per-instance data view.</param>
             /// <returns></returns>
             public FoldHelper(
-            IHostEnvironment env,
-            string registrationName,
-            IDataView inputDataView,
-            string splitColumn,
-            Arguments args,
-            Func<IHostEnvironment, IChannel, IDataView, ITrainer, RoleMappedData> createExamples,
-            Func<IHostEnvironment, IChannel, IDataView, RoleMappedData, IDataView, RoleMappedData> applyTransformsToTestData,
-            IComponentFactory<IDataView, ISchemaBoundMapper, RoleMappedSchema, IDataScorerTransform> scorer,
-            IComponentFactory<IMamlEvaluator> evaluator,
-            Func<IDataView> getValidationDataView = null,
-            Func<IHostEnvironment, IChannel, IDataView, RoleMappedData, IDataView, RoleMappedData> applyTransformsToValidationData = null,
-            IPredictor inputPredictor = null,
-            string cmd = null,
-            ILegacyDataLoader loader = null,
-            bool savePerInstance = false)
+                IHostEnvironment env,
+                string registrationName,
+                IDataView inputDataView,
+                string splitColumn,
+                Arguments args,
+                Func<IHostEnvironment, IChannel, IDataView, ITrainer, Task<RoleMappedData>> createExamplesAsync,
+                Func<IHostEnvironment, IChannel, IDataView, RoleMappedData, IDataView, RoleMappedData> applyTransformsToTestData,
+                IComponentFactory<IDataView, ISchemaBoundMapper, RoleMappedSchema, IDataScorerTransform> scorer,
+                IComponentFactory<IMamlEvaluator> evaluator,
+                Func<Task<IDataView>> getValidationDataViewAsync = null,
+                Func<IHostEnvironment, IChannel, IDataView, RoleMappedData, IDataView, RoleMappedData> applyTransformsToValidationData = null,
+                IPredictor inputPredictor = null,
+                string cmd = null,
+                ILegacyDataLoader loader = null,
+                bool savePerInstance = false)
             {
                 Contracts.CheckValue(env, nameof(env));
                 env.CheckNonWhiteSpace(registrationName, nameof(registrationName));
                 env.CheckValue(inputDataView, nameof(inputDataView));
                 env.CheckValue(splitColumn, nameof(splitColumn));
                 env.CheckParam(args.NumFolds > 1, nameof(args.NumFolds));
-                env.CheckValue(createExamples, nameof(createExamples));
+                env.CheckValue(createExamplesAsync, nameof(createExamplesAsync));
                 env.CheckValue(applyTransformsToTestData, nameof(applyTransformsToTestData));
                 env.CheckValue(args.Trainer, nameof(args.Trainer));
                 env.CheckValueOrNull(scorer);
                 env.CheckValueOrNull(evaluator);
                 env.CheckValueOrNull(args.Calibrator);
                 env.CheckParam(args.MaxCalibrationExamples > 0, nameof(args.MaxCalibrationExamples));
-                env.CheckParam(getValidationDataView == null || applyTransformsToValidationData != null, nameof(applyTransformsToValidationData));
+                env.CheckParam(getValidationDataViewAsync == null || applyTransformsToValidationData != null, nameof(applyTransformsToValidationData));
                 env.CheckValueOrNull(inputPredictor);
                 env.CheckValueOrNull(cmd);
                 env.CheckValueOrNull(args.OutputModelFile);
@@ -450,7 +449,7 @@ namespace Microsoft.ML.Data
                 _inputDataView = inputDataView;
                 _splitColumn = splitColumn;
                 _numFolds = args.NumFolds;
-                _createExamples = createExamples;
+                _createExamplesAsync = createExamplesAsync;
                 _applyTransformsToTestData = applyTransformsToTestData;
                 _trainer = args.Trainer;
                 _scorer = scorer;
@@ -459,7 +458,7 @@ namespace Microsoft.ML.Data
                 _maxCalibrationExamples = args.MaxCalibrationExamples;
                 _useThreads = args.UseThreads;
                 _cacheData = args.CacheData;
-                _getValidationDataView = getValidationDataView;
+                _getValidationDataViewAsync = getValidationDataViewAsync;
                 _applyTransformsToValidationData = applyTransformsToValidationData;
                 _inputPredictor = inputPredictor;
                 _cmd = cmd;
@@ -482,27 +481,22 @@ namespace Microsoft.ML.Data
             ///     keys are generated by hashing for example, it should result in balanced folds.
             /// </summary>
             /// <returns></returns>
-            public Task<FoldResult>[] GetCrossValidationTasks()
+            public async Task<FoldResult[]> GetCrossValidationTasksAsync()
             {
                 var tasks = new Task<FoldResult>[_numFolds];
                 for (int i = 0; i < _numFolds; i++)
                 {
                     var fold = i;
-                    tasks[i] = new Task<FoldResult>(() =>
-                    {
-                        return RunFold(fold);
-                    });
-
                     if (_useThreads)
-                        tasks[i].Start();
+                        tasks[i] = Task.Run(async () => await RunFoldAsync(fold));
                     else
-                        tasks[i].RunSynchronously();
+                        tasks[i] = Task.FromResult(await RunFoldAsync(fold));
                 }
-                Task.WaitAll(tasks);
-                return tasks;
+
+                return await Task.WhenAll(tasks);
             }
 
-            private FoldResult RunFold(int fold)
+            private async Task<FoldResult> RunFoldAsync(int fold)
             {
                 var host = GetHost();
                 host.Assert(0 <= fold && fold <= _numFolds);
@@ -520,7 +514,7 @@ namespace Microsoft.ML.Data
                     trainFilter.Complement = true;
                     IDataView trainPipe = new RangeFilter(host, trainFilter, _inputDataView);
                     trainPipe = new OpaqueDataView(trainPipe);
-                    var trainData = _createExamples(host, ch, trainPipe, trainer);
+                    var trainData = await _createExamplesAsync(host, ch, trainPipe, trainer);
 
                     // Test pipe.
                     var testFilter = new RangeFilter.Options();
@@ -534,7 +528,7 @@ namespace Microsoft.ML.Data
 
                     // Validation pipe and examples.
                     RoleMappedData validData = null;
-                    if (_getValidationDataView != null)
+                    if (_getValidationDataViewAsync != null)
                     {
                         ch.Assert(_applyTransformsToValidationData != null);
                         if (!trainer.Info.SupportsValidation)
@@ -542,7 +536,7 @@ namespace Microsoft.ML.Data
                         else
                         {
                             ch.Trace("Constructing the validation pipeline");
-                            IDataView validLoader = _getValidationDataView();
+                            IDataView validLoader = await _getValidationDataViewAsync();
                             var validPipe = ApplyTransformUtils.ApplyAllTransformsToData(host, _inputDataView, validLoader);
                             validPipe = new OpaqueDataView(validPipe);
                             validData = _applyTransformsToValidationData(host, ch, validPipe, trainData, trainPipe);
@@ -550,7 +544,7 @@ namespace Microsoft.ML.Data
                     }
 
                     // Train.
-                    var predictor = TrainUtils.Train(host, ch, trainData, trainer, validData,
+                    var predictor = await TrainUtils.TrainAsync(host, ch, trainData, trainer, validData,
                         _calibrator, _maxCalibrationExamples, _cacheData, _inputPredictor);
 
                     // Score.
@@ -569,8 +563,8 @@ namespace Microsoft.ML.Data
                         using (var file = host.CreateOutputFile(modelFileName))
                         {
                             var rmd = new RoleMappedData(
-                                LegacyCompositeDataLoader.ApplyTransform(host, _loader, null, null,
-                                (e, newSource) => ApplyTransformUtils.ApplyAllTransformsToData(e, trainData.Data, newSource)),
+                                await LegacyCompositeDataLoader.ApplyTransformAsync(host, _loader, null, null,
+                                async (e, newSource) => ApplyTransformUtils.ApplyAllTransformsToData(e, trainData.Data, newSource)),
                                 trainData.Schema.GetColumnRoleNames());
                             TrainUtils.SaveModel(host, ch, file, predictor, rmd, _cmd);
                         }

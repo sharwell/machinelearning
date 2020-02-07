@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -152,7 +153,7 @@ namespace Microsoft.ML.Transforms
             return ivec;
         }
 
-        public ExpressionTransformer Fit(IDataView input)
+        public async ITask<ExpressionTransformer> FitAsync(IDataView input)
         {
             var columns = new ExpressionTransformer.ColumnInfo[_columns.Length];
             for (int i = 0; i < _columns.Length; i++)
@@ -166,7 +167,7 @@ namespace Microsoft.ML.Transforms
             return new ExpressionTransformer(_host, columns);
         }
 
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var columnDictionary = inputSchema.ToDictionary(x => x.Name);
@@ -310,7 +311,7 @@ namespace Microsoft.ML.Transforms
         }
 
         // Factory method corresponding to SignatureDataTransform.
-        private static IDataTransform Create(IHostEnvironment env, Options options, IDataView input)
+        private static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(options, nameof(options));
@@ -324,7 +325,7 @@ namespace Microsoft.ML.Transforms
                     options.Column[i].Expression ?? options.Expression);
             }
 
-            return new ExpressionEstimator(env, columns).Fit(input).MakeDataTransform(input);
+            return (await new ExpressionEstimator(env, columns).FitAsync(input)).MakeDataTransform(input);
         }
 
         // Factory method for SignatureLoadDataTransform.

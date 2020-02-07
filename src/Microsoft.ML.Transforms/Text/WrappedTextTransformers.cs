@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Data.DataLoadSave;
 using Microsoft.ML.Internal.Utilities;
@@ -172,10 +173,10 @@ namespace Microsoft.ML.Transforms.Text
         }
 
         /// <summary> Trains and returns a <see cref="ITransformer"/>.</summary>
-        public ITransformer Fit(IDataView input)
+        public async ITask<ITransformer> FitAsync(IDataView input)
         {
-            var estimator = WordBagBuildingTransformer.CreateEstimator(_host, CreateOptions(), SchemaShape.Create(input.Schema));
-            return estimator.Fit(input);
+            var estimator = await WordBagBuildingTransformer.CreateEstimatorAsync(_host, CreateOptions(), SchemaShape.Create(input.Schema));
+            return await estimator.FitAsync(input);
         }
 
         private WordBagBuildingTransformer.Options CreateOptions()
@@ -195,12 +196,12 @@ namespace Microsoft.ML.Transforms.Text
         /// Schema propagation for estimators.
         /// Returns the output schema shape of the estimator, if the input schema shape is like the one provided.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
 
-            var estimator = WordBagBuildingTransformer.CreateEstimator(_host, CreateOptions(), inputSchema);
-            return estimator.GetOutputSchema(inputSchema);
+            var estimator = await WordBagBuildingTransformer.CreateEstimatorAsync(_host, CreateOptions(), inputSchema);
+            return await estimator.GetOutputSchemaAsync(inputSchema);
         }
     }
 
@@ -354,7 +355,7 @@ namespace Microsoft.ML.Transforms.Text
         }
 
         /// <summary> Trains and returns a <see cref="ITransformer"/>.</summary>
-        public ITransformer Fit(IDataView input)
+        public async ITask<ITransformer> FitAsync(IDataView input)
         {
             // Create arguments.
             var options = new WordHashBagProducingTransformer.Options
@@ -369,19 +370,19 @@ namespace Microsoft.ML.Transforms.Text
                 MaximumNumberOfInverts = _maximumNumberOfInverts
             };
 
-            return WordHashBagProducingTransformer.CreateTransformer(_host, options, input);
+            return await WordHashBagProducingTransformer.CreateTransformerAsync(_host, options, input);
         }
 
         /// <summary>
         /// Schema propagation for estimators.
         /// Returns the output schema shape of the estimator, if the input schema shape is like the one provided.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
 
             var fakeSchema = FakeSchemaFactory.Create(inputSchema);
-            var transformer = Fit(new EmptyDataView(_host, fakeSchema));
+            var transformer = await FitAsync(new EmptyDataView(_host, fakeSchema));
             return SchemaShape.Create(transformer.GetOutputSchema(fakeSchema));
         }
     }

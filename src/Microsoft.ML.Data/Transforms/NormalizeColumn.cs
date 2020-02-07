@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -271,18 +272,18 @@ namespace Microsoft.ML.Transforms
         /// <param name="input">Input <see cref="IDataView"/>. This is the output from previous transform or loader.</param>
         /// <param name="outputColumnName">Name of the output column.</param>
         /// <param name="inputColumnName">Name of the column to be transformed. If this is null '<paramref name="outputColumnName"/>' will be used.</param>
-        public static IDataView CreateMinMaxNormalizer(IHostEnvironment env, IDataView input, string outputColumnName, string inputColumnName = null)
+        public static async Task<IDataView> CreateMinMaxNormalizerAsync(IHostEnvironment env, IDataView input, string outputColumnName, string inputColumnName = null)
         {
             Contracts.CheckValue(env, nameof(env));
 
             var normalizer = new NormalizingEstimator(env, new NormalizingEstimator.MinMaxColumnOptions(outputColumnName, inputColumnName ?? outputColumnName));
-            return normalizer.Fit(input).MakeDataTransform(input);
+            return (await normalizer.FitAsync(input)).MakeDataTransform(input);
         }
 
         /// <summary>
         /// Factory method corresponding to SignatureDataTransform.
         /// </summary>
-        internal static IDataTransform Create(IHostEnvironment env, MinMaxArguments args, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, MinMaxArguments args, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(args, nameof(args));
@@ -296,11 +297,11 @@ namespace Microsoft.ML.Transforms
                     col.EnsureZeroUntouched ?? args.EnsureZeroUntouched))
                 .ToArray();
             var normalizer = new NormalizingEstimator(env, columns);
-            return normalizer.Fit(input).MakeDataTransform(input);
+            return (await normalizer.FitAsync(input)).MakeDataTransform(input);
         }
 
         // Factory method corresponding to SignatureDataTransform.
-        internal static IDataTransform Create(IHostEnvironment env, MeanVarArguments args, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, MeanVarArguments args, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(args, nameof(args));
@@ -314,13 +315,13 @@ namespace Microsoft.ML.Transforms
                     col.EnsureZeroUntouched ?? args.EnsureZeroUntouched))
                 .ToArray();
             var normalizer = new NormalizingEstimator(env, columns);
-            return normalizer.Fit(input).MakeDataTransform(input);
+            return (await normalizer.FitAsync(input)).MakeDataTransform(input);
         }
 
         /// <summary>
         /// Factory method corresponding to SignatureDataTransform.
         /// </summary>
-        internal static IDataTransform Create(IHostEnvironment env, LogMeanVarArguments args, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, LogMeanVarArguments args, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(args, nameof(args));
@@ -334,13 +335,13 @@ namespace Microsoft.ML.Transforms
                     args.UseCdf))
                 .ToArray();
             var normalizer = new NormalizingEstimator(env, columns);
-            return normalizer.Fit(input).MakeDataTransform(input);
+            return (await normalizer.FitAsync(input)).MakeDataTransform(input);
         }
 
         /// <summary>
         /// Factory method corresponding to SignatureDataTransform.
         /// </summary>
-        internal static IDataTransform Create(IHostEnvironment env, BinArguments args, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, BinArguments args, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(args, nameof(args));
@@ -355,7 +356,7 @@ namespace Microsoft.ML.Transforms
                     col.NumBins ?? args.NumBins))
                 .ToArray();
             var normalizer = new NormalizingEstimator(env, columns);
-            return normalizer.Fit(input).MakeDataTransform(input);
+            return (await normalizer.FitAsync(input)).MakeDataTransform(input);
         }
 
         internal abstract partial class AffineColumnFunction : IColumnFunction

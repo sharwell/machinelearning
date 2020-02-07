@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
@@ -407,13 +408,13 @@ namespace Microsoft.ML
         /// ]]>
         /// </format>
         /// </example>
-        public TrainTestData TrainTestSplit(IDataView data, double testFraction = 0.1, string samplingKeyColumnName = null, int? seed = null)
+        public async Task<TrainTestData> TrainTestSplitAsync(IDataView data, double testFraction = 0.1, string samplingKeyColumnName = null, int? seed = null)
         {
             _env.CheckValue(data, nameof(data));
             _env.CheckParam(0 < testFraction && testFraction < 1, nameof(testFraction), "Must be between 0 and 1 exclusive");
             _env.CheckValueOrNull(samplingKeyColumnName);
 
-            EnsureGroupPreservationColumn(_env, ref data, ref samplingKeyColumnName, seed);
+            (data, samplingKeyColumnName) = await EnsureGroupPreservationColumnAsync(_env, data, samplingKeyColumnName, seed);
 
             var trainFilter = new RangeFilter(_env, new RangeFilter.Options()
             {
@@ -450,12 +451,13 @@ namespace Microsoft.ML
         /// ]]>
         /// </format>
         /// </example>
-        public IReadOnlyList<TrainTestData> CrossValidationSplit(IDataView data, int numberOfFolds = 5, string samplingKeyColumnName = null, int? seed = null)
+        public async Task<IReadOnlyList<TrainTestData>> CrossValidationSplitAsync(IDataView data, int numberOfFolds = 5, string samplingKeyColumnName = null, int? seed = null)
         {
             _env.CheckValue(data, nameof(data));
             _env.CheckParam(numberOfFolds > 1, nameof(numberOfFolds), "Must be more than 1");
             _env.CheckValueOrNull(samplingKeyColumnName);
-            EnsureGroupPreservationColumn(_env, ref data, ref samplingKeyColumnName, seed);
+
+            (data, samplingKeyColumnName) = await EnsureGroupPreservationColumnAsync(_env, data, samplingKeyColumnName, seed);
             var result = new List<TrainTestData>();
             foreach (var split in CrossValidationSplit(_env, data, numberOfFolds, samplingKeyColumnName))
                 result.Add(split);
@@ -493,7 +495,7 @@ namespace Microsoft.ML
         /// <summary>
         /// Ensures the provided <paramref name="samplingKeyColumn"/> is valid for <see cref="RangeFilter"/>, hashing it if necessary, or creates a new column <paramref name="samplingKeyColumn"/> is null.
         /// </summary>
-        internal static void EnsureGroupPreservationColumn(IHostEnvironment env, ref IDataView data, ref string samplingKeyColumn, int? seed = null)
+        internal static async Task<(IDataView data, string samplingKeyColumn)> EnsureGroupPreservationColumnAsync(IHostEnvironment env, IDataView data, string samplingKeyColumn, int? seed = null)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("rand");
@@ -519,7 +521,7 @@ namespace Microsoft.ML
                     var origStratCol = samplingKeyColumn;
                     samplingKeyColumn = data.Schema.GetTempColumnName(samplingKeyColumn);
                     var columnOptions = new HashingEstimator.ColumnOptionsInternal(samplingKeyColumn, origStratCol, 30, (uint)(seed ?? host.Rand.Next()));
-                    data = new HashingEstimator(env, columnOptions).Fit(data).Transform(data);
+                    data = (await new HashingEstimator(env, columnOptions).FitAsync(data)).Transform(data);
                 }
                 else
                 {
@@ -527,10 +529,12 @@ namespace Microsoft.ML
                     {
                         var origStratCol = samplingKeyColumn;
                         samplingKeyColumn = data.Schema.GetTempColumnName(samplingKeyColumn);
-                        data = new NormalizingEstimator(env, new NormalizingEstimator.MinMaxColumnOptions(samplingKeyColumn, origStratCol, ensureZeroUntouched: true)).Fit(data).Transform(data);
+                        data = (await new NormalizingEstimator(env, new NormalizingEstimator.MinMaxColumnOptions(samplingKeyColumn, origStratCol, ensureZeroUntouched: true)).FitAsync(data)).Transform(data);
                     }
                 }
             }
+
+            return (data, samplingKeyColumn);
         }
     }
 }

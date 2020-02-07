@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -107,14 +108,14 @@ namespace Microsoft.ML.Trainers
                     dst = equalsTarget(in src) ? true : false);
         }
 
-        private protected abstract TModel TrainCore(IChannel ch, RoleMappedData data, int count);
+        private protected abstract Task<TModel> TrainCoreAsync(IChannel ch, RoleMappedData data, int count);
 
         /// <summary>
         /// The legacy train method.
         /// </summary>
         /// <param name="context">The trainig context for this learner.</param>
         /// <returns>The trained model.</returns>
-        IPredictor ITrainer<IPredictor>.Train(TrainContext context)
+        async Task<IPredictor> ITrainer<IPredictor>.TrainAsync(TrainContext context)
         {
             Host.CheckValue(context, nameof(context));
             var data = context.TrainingSet;
@@ -127,7 +128,7 @@ namespace Microsoft.ML.Trainers
 
             using (var ch = Host.Start("Training"))
             {
-                var pred = TrainCore(ch, data, count) as IPredictor;
+                var pred = await TrainCoreAsync(ch, data, count) as IPredictor;
                 ch.Check(pred != null, "Training did not result in a predictor");
                 return pred;
             }
@@ -138,7 +139,7 @@ namespace Microsoft.ML.Trainers
         /// </summary>
         /// <param name="inputSchema">The input schema. </param>
         /// <returns>The output <see cref="SchemaShape"/></returns>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             Host.CheckValue(inputSchema, nameof(inputSchema));
 
@@ -181,13 +182,13 @@ namespace Microsoft.ML.Trainers
             };
         }
 
-        IPredictor ITrainer.Train(TrainContext context) => ((ITrainer<IPredictor>)this).Train(context);
+        async Task<IPredictor> ITrainer.TrainAsync(TrainContext context) => await ((ITrainer<IPredictor>)this).TrainAsync(context);
 
         /// <summary>
         /// Fits the data to the trainer.
         /// </summary>
         /// <param name="input">The input data to fit to.</param>
         /// <returns>The transformer.</returns>
-        public abstract TTransformer Fit(IDataView input);
+        public abstract ITask<TTransformer> FitAsync(IDataView input);
     }
 }

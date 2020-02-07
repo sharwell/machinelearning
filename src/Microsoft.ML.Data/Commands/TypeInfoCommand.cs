@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.Data.Commands;
@@ -72,7 +73,7 @@ namespace Microsoft.ML.Data.Commands
             }
         }
 
-        public void Run()
+        public async Task RunAsync()
         {
             using (var ch = _host.Start("Run"))
             {

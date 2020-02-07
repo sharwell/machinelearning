@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -68,7 +69,7 @@ namespace Microsoft.ML.Data
             Utils.CheckOptionalUserDirectory(ImplOptions.OutputDataFile, nameof(ImplOptions.OutputDataFile));
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             string command = "Test";
             using (var ch = Host.Start(command))
@@ -80,18 +81,18 @@ namespace Microsoft.ML.Data
                 SendTelemetry(Host);
                 using (new TimerScope(Host, ch))
                 {
-                    RunCore(ch);
+                    await RunCoreAsync(ch);
                 }
             }
         }
 
-        private void RunCore(IChannel ch)
+        private async Task RunCoreAsync(IChannel ch)
         {
             ch.Trace("Constructing data pipeline");
             ILegacyDataLoader loader;
             IPredictor predictor;
             RoleMappedSchema trainSchema;
-            LoadModelObjects(ch, true, out predictor, true, out trainSchema, out loader);
+            (predictor, trainSchema, loader) = await LoadModelObjectsAsync(ch, true, true);
             ch.AssertValue(predictor);
             ch.AssertValueOrNull(trainSchema);
             ch.AssertValue(loader);

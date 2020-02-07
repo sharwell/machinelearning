@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 
 namespace Microsoft.ML
@@ -58,8 +59,8 @@ namespace Microsoft.ML
         /// </summary>
         /// <param name="context">A context containing at least the training data</param>
         /// <returns>The trained predictor</returns>
-        /// <seealso cref="ITrainer{TPredictor}.Train(TrainContext)"/>
-        IPredictor Train(TrainContext context);
+        /// <seealso cref="ITrainer{TPredictor}.TrainAsync(TrainContext)"/>
+        Task<IPredictor> TrainAsync(TrainContext context);
     }
 
     /// <summary>
@@ -68,7 +69,7 @@ namespace Microsoft.ML
     /// </summary>
     /// <typeparam name="TPredictor"> Type of predictor produced</typeparam>
     [BestFriend]
-    internal interface ITrainer<out TPredictor> : ITrainer
+    internal interface ITrainer<TPredictor> : ITrainer
         where TPredictor : IPredictor
     {
         /// <summary>
@@ -76,7 +77,7 @@ namespace Microsoft.ML
         /// </summary>
         /// <param name="context">A context containing at least the training data</param>
         /// <returns>The trained predictor</returns>
-        new TPredictor Train(TrainContext context);
+        new Task<TPredictor> TrainAsync(TrainContext context);
     }
 
     [BestFriend]
@@ -84,24 +85,24 @@ namespace Microsoft.ML
     {
         /// <summary>
         /// Convenience train extension for the case where one has only a training set with no auxiliary information.
-        /// Equivalent to calling <see cref="ITrainer.Train(TrainContext)"/>
+        /// Equivalent to calling <see cref="ITrainer.TrainAsync(TrainContext)"/>
         /// on a <see cref="TrainContext"/> constructed with <paramref name="trainData"/>.
         /// </summary>
         /// <param name="trainer">The trainer</param>
         /// <param name="trainData">The training data.</param>
         /// <returns>The trained predictor</returns>
-        public static IPredictor Train(this ITrainer trainer, RoleMappedData trainData)
-            => trainer.Train(new TrainContext(trainData));
+        public static async Task<IPredictor> TrainAsync(this ITrainer trainer, RoleMappedData trainData)
+            => await trainer.TrainAsync(new TrainContext(trainData));
 
         /// <summary>
         /// Convenience train extension for the case where one has only a training set with no auxiliary information.
-        /// Equivalent to calling <see cref="ITrainer{TPredictor}.Train(TrainContext)"/>
+        /// Equivalent to calling <see cref="ITrainer{TPredictor}.TrainAsync(TrainContext)"/>
         /// on a <see cref="TrainContext"/> constructed with <paramref name="trainData"/>.
         /// </summary>
         /// <param name="trainer">The trainer</param>
         /// <param name="trainData">The training data.</param>
         /// <returns>The trained predictor</returns>
-        public static TPredictor Train<TPredictor>(this ITrainer<TPredictor> trainer, RoleMappedData trainData) where TPredictor : IPredictor
-            => trainer.Train(new TrainContext(trainData));
+        public static async Task<TPredictor> TrainAsync<TPredictor>(this ITrainer<TPredictor> trainer, RoleMappedData trainData) where TPredictor : IPredictor
+            => await trainer.TrainAsync(new TrainContext(trainData));
     }
 }

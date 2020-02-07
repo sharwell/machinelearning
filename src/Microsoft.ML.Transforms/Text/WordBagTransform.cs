@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -95,7 +96,7 @@ namespace Microsoft.ML.Transforms.Text
         internal const string Summary = "Produces a bag of counts of n-grams (sequences of consecutive words of length 1-n) in a given text. It does so by building "
             + "a dictionary of n-grams and using the id in the dictionary as the index in the bag.";
 
-        internal static IEstimator<ITransformer> CreateEstimator(IHostEnvironment env, Options options, SchemaShape inputSchema)
+        internal static async Task<IEstimator<ITransformer>> CreateEstimatorAsync(IHostEnvironment env, Options options, SchemaShape inputSchema)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(RegistrationName);
@@ -150,12 +151,12 @@ namespace Microsoft.ML.Transforms.Text
 
             IEstimator<ITransformer> estimator = NgramExtractionUtils.GetConcatEstimator(h, options.Columns);
             estimator = estimator.Append(new WordTokenizingEstimator(env, tokenizeColumns));
-            estimator = estimator.Append(NgramExtractorTransform.CreateEstimator(h, extractorArgs, estimator.GetOutputSchema(inputSchema)));
+            estimator = estimator.Append(NgramExtractorTransform.CreateEstimator(h, extractorArgs, await estimator.GetOutputSchemaAsync(inputSchema)));
             return estimator;
         }
 
-        internal static IDataTransform Create(IHostEnvironment env, Options options, IDataView input) =>
-            (IDataTransform)CreateEstimator(env, options, SchemaShape.Create(input.Schema)).Fit(input).Transform(input);
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input) =>
+            (IDataTransform)(await (await CreateEstimatorAsync(env, options, SchemaShape.Create(input.Schema))).FitAsync(input)).Transform(input);
     }
 
     /// <summary>
@@ -342,12 +343,12 @@ namespace Microsoft.ML.Transforms.Text
             return chain.Append<ITransformer>(new NgramExtractingEstimator(env, ngramColumns));
         }
 
-        internal static IDataTransform CreateDataTransform(IHostEnvironment env, Options options, IDataView input,
+        internal static async Task<IDataTransform> CreateDataTransformAsync(IHostEnvironment env, Options options, IDataView input,
             TermLoaderArguments termLoaderArgs = null)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(input, nameof(input));
-            return CreateEstimator(env, options, SchemaShape.Create(input.Schema), termLoaderArgs).Fit(input).Transform(input)/* Create(env, options, input, termLoaderArgs).Transform(input) */as IDataTransform;
+            return (await CreateEstimator(env, options, SchemaShape.Create(input.Schema), termLoaderArgs).FitAsync(input)).Transform(input)/* Create(env, options, input, termLoaderArgs).Transform(input) */as IDataTransform;
         }
 
         internal static Options CreateNgramExtractorOptions(NgramExtractorArguments extractorArgs, ExtractorColumn[] cols)
@@ -423,7 +424,7 @@ namespace Microsoft.ML.Transforms.Text
         /// </summary>
         bool UseHashingTrick { get; }
 
-        ITransformer Create(IHostEnvironment env, IDataView input, ExtractorColumn[] cols);
+        Task<ITransformer> CreateAsync(IHostEnvironment env, IDataView input, ExtractorColumn[] cols);
     }
 
     [TlcModule.ComponentKind("NgramExtractor")]
@@ -448,10 +449,10 @@ namespace Microsoft.ML.Transforms.Text
             _termLoaderArgs = termLoaderArgs;
         }
 
-        public ITransformer Create(IHostEnvironment env, IDataView input, ExtractorColumn[] cols)
+        public async Task<ITransformer> CreateAsync(IHostEnvironment env, IDataView input, ExtractorColumn[] cols)
         {
             var options = NgramExtractorTransform.CreateNgramExtractorOptions(_extractorArgs, cols);
-            return NgramExtractorTransform.CreateEstimator(env, options, SchemaShape.Create(input.Schema), _termLoaderArgs).Fit(input);
+            return await NgramExtractorTransform.CreateEstimator(env, options, SchemaShape.Create(input.Schema), _termLoaderArgs).FitAsync(input);
         }
     }
 
@@ -470,9 +471,9 @@ namespace Microsoft.ML.Transforms.Text
             _extractorArgs = extractorArgs;
         }
 
-        public ITransformer Create(IHostEnvironment env, IDataView input, ExtractorColumn[] cols)
+        public async Task<ITransformer> CreateAsync(IHostEnvironment env, IDataView input, ExtractorColumn[] cols)
         {
-            return NgramHashExtractingTransformer.Create(_extractorArgs, env, input, cols);
+            return await NgramHashExtractingTransformer.CreateAsync(_extractorArgs, env, input, cols);
         }
     }
 

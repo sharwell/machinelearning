@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -84,7 +85,7 @@ namespace Microsoft.ML.Transforms
         internal static string RegistrationName = "LearnerFeatureSelectionTransform";
 
         // Factory method for SignatureDataTransform.
-        private static IDataTransform Create(IHostEnvironment env, Options options, IDataView input)
+        private static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register(RegistrationName);
@@ -93,7 +94,7 @@ namespace Microsoft.ML.Transforms
             options.Check(host);
 
             var scores = default(VBuffer<Single>);
-            TrainCore(host, input, options, ref scores);
+            scores = await TrainCoreAsync(host, input, options, scores);
 
             using (var ch = host.Start("Dropping Slots"))
             {
@@ -263,7 +264,7 @@ namespace Microsoft.ML.Transforms
             return threshold;
         }
 
-        private static void TrainCore(IHost host, IDataView input, Options options, ref VBuffer<Single> scores)
+        private static async Task<VBuffer<Single>> TrainCoreAsync(IHost host, IDataView input, Options options, VBuffer<Single> scores)
         {
             Contracts.AssertValue(host);
             host.AssertValue(options);
@@ -284,26 +285,28 @@ namespace Microsoft.ML.Transforms
                 var weight = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(options.WeightColumn), options.WeightColumn, DefaultColumnNames.Weight);
                 var name = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(options.NameColumn), options.NameColumn, DefaultColumnNames.Name);
 
-                TrainUtils.AddNormalizerIfNeeded(host, ch, trainer, ref view, feature, options.NormalizeFeatures);
+                (_, view) = await TrainUtils.AddNormalizerIfNeededAsync(host, ch, trainer, view, feature, options.NormalizeFeatures);
 
                 ch.Trace("Binding columns");
 
                 var customCols = TrainUtils.CheckAndGenerateCustomColumns(ch, options.CustomColumns);
                 var data = new RoleMappedData(view, label, feature, group, weight, name, customCols);
 
-                var predictor = TrainUtils.Train(host, ch, data, trainer, null,
+                var predictor = await TrainUtils.TrainAsync(host, ch, data, trainer, null,
                     null, 0, options.CacheData);
 
                 var rfs = predictor as IPredictorWithFeatureWeights<Single>;
                 Contracts.AssertValue(rfs);
                 rfs.GetFeatureWeights(ref scores);
             }
+
+            return scores;
         }
 
         /// <summary>
         /// Returns a score for each slot of the features column.
         /// </summary>
-        public static void Train(IHostEnvironment env, IDataView input, Options options, ref VBuffer<Single> scores)
+        public static async Task<VBuffer<Single>> TrainAsync(IHostEnvironment env, IDataView input, Options options, VBuffer<Single> scores)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register(RegistrationName);
@@ -311,7 +314,7 @@ namespace Microsoft.ML.Transforms
             host.CheckValue(input, nameof(input));
             options.Check(host);
 
-            TrainCore(host, input, options, ref scores);
+            return await TrainCoreAsync(host, input, options, scores);
         }
     }
 }

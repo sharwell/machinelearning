@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime;
 
@@ -74,9 +75,9 @@ namespace Microsoft.ML.Trainers
         /// Derived class can overload this function.
         /// For example, it could take an additional dataset to train with a separate validation set.
         /// </remarks>
-        public TTransformer Fit(IDataView input) => TrainTransformer(input);
+        public async ITask<TTransformer> FitAsync(IDataView input) => await TrainTransformerAsync(input);
 
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             Host.CheckValue(inputSchema, nameof(inputSchema));
 
@@ -94,10 +95,10 @@ namespace Microsoft.ML.Trainers
         /// </summary>
         private protected abstract SchemaShape.Column[] GetOutputColumnsCore(SchemaShape inputSchema);
 
-        IPredictor ITrainer<IPredictor>.Train(TrainContext context)
+        async Task<IPredictor> ITrainer<IPredictor>.TrainAsync(TrainContext context)
         {
             Host.CheckValue(context, nameof(context));
-            var pred = TrainModelCore(context) as IPredictor;
+            var pred = await TrainModelCoreAsync(context) as IPredictor;
             Host.Check(pred != null, "Training did not return a predictor.");
             return pred;
         }
@@ -141,7 +142,7 @@ namespace Microsoft.ML.Trainers
         }
 
         [BestFriend]
-        private protected TTransformer TrainTransformer(IDataView trainSet,
+        private protected async Task<TTransformer> TrainTransformerAsync(IDataView trainSet,
             IDataView validationSet = null, IPredictor initPredictor = null)
         {
             CheckInputSchema(SchemaShape.Create(trainSet.Schema));
@@ -154,18 +155,18 @@ namespace Microsoft.ML.Trainers
                 validRoleMapped = MakeRoles(validationSet);
             }
 
-            var pred = TrainModelCore(new TrainContext(trainRoleMapped, validRoleMapped, null, initPredictor));
+            var pred = await TrainModelCoreAsync(new TrainContext(trainRoleMapped, validRoleMapped, null, initPredictor));
             return MakeTransformer(pred, trainSet.Schema);
         }
 
-        private protected abstract TModel TrainModelCore(TrainContext trainContext);
+        private protected abstract Task<TModel> TrainModelCoreAsync(TrainContext trainContext);
 
         private protected abstract TTransformer MakeTransformer(TModel model, DataViewSchema trainSchema);
 
         private protected virtual RoleMappedData MakeRoles(IDataView data) =>
             new RoleMappedData(data, label: LabelColumn.Name, feature: FeatureColumn.Name, weight: WeightColumn.Name);
 
-        IPredictor ITrainer.Train(TrainContext context) => ((ITrainer<IPredictor>)this).Train(context);
+        async Task<IPredictor> ITrainer.TrainAsync(TrainContext context) => await ((ITrainer<IPredictor>)this).TrainAsync(context);
     }
 
     /// <summary>

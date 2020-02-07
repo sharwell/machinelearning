@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.Command;
@@ -108,7 +109,7 @@ namespace Microsoft.ML.Data
             _nameColumn = args.NameColumn;
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             string command = "Train";
             using (var ch = Host.Start(command))
@@ -122,7 +123,7 @@ namespace Microsoft.ML.Data
 
                 using (new TimerScope(Host, ch))
                 {
-                    RunCore(ch, cmd);
+                    await RunCoreAsync(ch, cmd);
                 }
             }
         }
@@ -133,7 +134,7 @@ namespace Microsoft.ML.Data
             base.SendTelemetryCore(pipe);
         }
 
-        private void RunCore(IChannel ch, string cmd)
+        private async Task RunCoreAsync(IChannel ch, string cmd)
         {
             Host.AssertValue(ch);
             Host.AssertNonEmpty(cmd);
@@ -146,7 +147,7 @@ namespace Microsoft.ML.Data
                 ch.Warning("No input model file specified or model file did not contain a predictor. The model state cannot be initialized.");
 
             ch.Trace("Constructing data pipeline");
-            IDataView view = CreateLoader();
+            IDataView view = await CreateLoaderAsync();
 
             var schema = view.Schema;
             var label = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(Arguments.LabelColumn), _labelColumn, DefaultColumnNames.Label);
@@ -155,7 +156,7 @@ namespace Microsoft.ML.Data
             var weight = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(Arguments.WeightColumn), _weightColumn, DefaultColumnNames.Weight);
             var name = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(Arguments.NameColumn), _nameColumn, DefaultColumnNames.Name);
 
-            TrainUtils.AddNormalizerIfNeeded(Host, ch, trainer, ref view, feature, ImplOptions.NormalizeFeatures);
+            (_, view) = await TrainUtils.AddNormalizerIfNeededAsync(Host, ch, trainer, view, feature, ImplOptions.NormalizeFeatures);
 
             ch.Trace("Binding columns");
 
@@ -173,7 +174,7 @@ namespace Microsoft.ML.Data
                 else
                 {
                     ch.Trace("Constructing the validation pipeline");
-                    IDataView validPipe = CreateRawLoader(dataFile: ImplOptions.ValidationFile);
+                    IDataView validPipe = await CreateRawLoaderAsync(dataFile: ImplOptions.ValidationFile);
                     validPipe = ApplyTransformUtils.ApplyAllTransformsToData(Host, view, validPipe);
                     validData = new RoleMappedData(validPipe, data.Schema.GetColumnRoleNames());
                 }
@@ -191,13 +192,13 @@ namespace Microsoft.ML.Data
                 if (trainer.Info.SupportsTest)
                 {
                     ch.Trace("Constructing the test pipeline");
-                    IDataView testPipeUsedInTrainer = CreateRawLoader(dataFile: ImplOptions.TestFile);
+                    IDataView testPipeUsedInTrainer = await CreateRawLoaderAsync(dataFile: ImplOptions.TestFile);
                     testPipeUsedInTrainer = ApplyTransformUtils.ApplyAllTransformsToData(Host, view, testPipeUsedInTrainer);
                     testDataUsedInTrainer = new RoleMappedData(testPipeUsedInTrainer, data.Schema.GetColumnRoleNames());
                 }
             }
 
-            var predictor = TrainUtils.Train(Host, ch, data, trainer, validData,
+            var predictor = await TrainUtils.TrainAsync(Host, ch, data, trainer, validData,
                 ImplOptions.Calibrator, ImplOptions.MaxCalibrationExamples, ImplOptions.CacheData, inputPredictor, testDataUsedInTrainer);
 
             using (var file = Host.CreateOutputFile(ImplOptions.OutputModelFile))
@@ -243,19 +244,19 @@ namespace Microsoft.ML.Data
 #pragma warning restore MSML_ContractsNameUsesNameof
         }
 
-        public static IPredictor Train(IHostEnvironment env, IChannel ch, RoleMappedData data, ITrainer trainer,
+        public static async Task<IPredictor> TrainAsync(IHostEnvironment env, IChannel ch, RoleMappedData data, ITrainer trainer,
             IComponentFactory<ICalibratorTrainer> calibrator, int maxCalibrationExamples)
         {
-            return TrainCore(env, ch, data, trainer, null, calibrator, maxCalibrationExamples, false);
+            return await TrainCoreAsync(env, ch, data, trainer, null, calibrator, maxCalibrationExamples, false);
         }
 
-        public static IPredictor Train(IHostEnvironment env, IChannel ch, RoleMappedData data, ITrainer trainer, RoleMappedData validData,
+        public static async Task<IPredictor> TrainAsync(IHostEnvironment env, IChannel ch, RoleMappedData data, ITrainer trainer, RoleMappedData validData,
             IComponentFactory<ICalibratorTrainer> calibrator, int maxCalibrationExamples, bool? cacheData, IPredictor inputPredictor = null, RoleMappedData testData = null)
         {
-            return TrainCore(env, ch, data, trainer, validData, calibrator, maxCalibrationExamples, cacheData, inputPredictor, testData);
+            return await TrainCoreAsync(env, ch, data, trainer, validData, calibrator, maxCalibrationExamples, cacheData, inputPredictor, testData);
         }
 
-        private static IPredictor TrainCore(IHostEnvironment env, IChannel ch, RoleMappedData data, ITrainer trainer, RoleMappedData validData,
+        private static async Task<IPredictor> TrainCoreAsync(IHostEnvironment env, IChannel ch, RoleMappedData data, ITrainer trainer, RoleMappedData validData,
             IComponentFactory<ICalibratorTrainer> calibrator, int maxCalibrationExamples, bool? cacheData, IPredictor inputPredictor = null, RoleMappedData testData = null)
         {
             Contracts.CheckValue(env, nameof(env));
@@ -277,7 +278,7 @@ namespace Microsoft.ML.Data
                 inputPredictor = null;
             }
             ch.Assert(validData == null || trainer.Info.SupportsValidation);
-            var predictor = trainer.Train(new TrainContext(data, validData, testData, inputPredictor));
+            var predictor = await trainer.TrainAsync(new TrainContext(data, validData, testData, inputPredictor));
             var caliTrainer = calibrator?.CreateComponent(env);
             return CalibratorUtils.TrainCalibratorIfNeeded(env, ch, caliTrainer, maxCalibrationExamples, trainer, predictor, data);
         }
@@ -439,7 +440,7 @@ namespace Microsoft.ML.Data
         }
 
         // Returns true if a normalizer was added.
-        public static bool AddNormalizerIfNeeded(IHostEnvironment env, IChannel ch, ITrainer trainer, ref IDataView view, string featureColumn, NormalizeOption autoNorm)
+        public static async Task<(bool, IDataView)> AddNormalizerIfNeededAsync(IHostEnvironment env, IChannel ch, ITrainer trainer, IDataView view, string featureColumn, NormalizeOption autoNorm)
         {
             Contracts.CheckValue(env, nameof(env));
             env.CheckValue(ch, nameof(ch));
@@ -452,11 +453,11 @@ namespace Microsoft.ML.Data
             if (autoNorm == NormalizeOption.No)
             {
                 ch.Info("Not adding a normalizer.");
-                return false;
+                return (false, view);
             }
 
             if (string.IsNullOrEmpty(featureColumn))
-                return false;
+                return (false, view);
 
             int featCol;
             var schema = view.Schema;
@@ -467,25 +468,25 @@ namespace Microsoft.ML.Data
                     if (!trainer.Info.NeedNormalization || schema[featCol].IsNormalized())
                     {
                         ch.Info("Not adding a normalizer.");
-                        return false;
+                        return (false, view);
                     }
                     if (autoNorm == NormalizeOption.Warn)
                     {
                         ch.Warning("A normalizer is needed for this trainer. Either add a normalizing transform or use the 'norm=Auto', 'norm=Yes' or 'norm=No' options.");
-                        return false;
+                        return (false, view);
                     }
                 }
                 ch.Info("Automatically adding a MinMax normalization transform, use 'norm=Warn' or 'norm=No' to turn this behavior off.");
-                IDataView ApplyNormalizer(IHostEnvironment innerEnv, IDataView input)
-                    => NormalizeTransform.CreateMinMaxNormalizer(innerEnv, input, featureColumn);
+                async Task<IDataView> ApplyNormalizerAsync(IHostEnvironment innerEnv, IDataView input)
+                    => await NormalizeTransform.CreateMinMaxNormalizerAsync(innerEnv, input, featureColumn);
 
                 if (view is ILegacyDataLoader loader)
-                    view = LegacyCompositeDataLoader.ApplyTransform(env, loader, tag: null, creationArgs: null, ApplyNormalizer);
+                    view = await LegacyCompositeDataLoader.ApplyTransformAsync(env, loader, tag: null, creationArgs: null, ApplyNormalizerAsync);
                 else
-                    view = ApplyNormalizer(env, view);
-                return true;
+                    view = await ApplyNormalizerAsync(env, view);
+                return (true, view);
             }
-            return false;
+            return (false, view);
         }
 
         private static bool AddCacheIfWanted(IHostEnvironment env, IChannel ch, ITrainer trainer, ref RoleMappedData data, bool? cacheData)

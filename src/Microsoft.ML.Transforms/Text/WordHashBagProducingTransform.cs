@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -83,7 +84,7 @@ namespace Microsoft.ML.Transforms.Text
         internal const string Summary = "Produces a bag of counts of n-grams (sequences of consecutive words of length 1-n) in a given text. "
             + "It does so by hashing each n-gram and using the hash value as the index in the bag.";
 
-        internal static ITransformer CreateTransformer(IHostEnvironment env, Options options, IDataView input)
+        internal static async Task<ITransformer> CreateTransformerAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(RegistrationName);
@@ -132,7 +133,7 @@ namespace Microsoft.ML.Transforms.Text
                     };
             }
 
-            ITransformer t1 = new WordTokenizingEstimator(env, tokenizeColumns.ToArray()).Fit(view);
+            ITransformer t1 = await new WordTokenizingEstimator(env, tokenizeColumns.ToArray()).FitAsync(view);
 
             var featurizeArgs =
                 new NgramHashExtractingTransformer.Options
@@ -148,7 +149,7 @@ namespace Microsoft.ML.Transforms.Text
                 };
 
             view = t1.Transform(view);
-            ITransformer t2 = NgramHashExtractingTransformer.Create(h, featurizeArgs, view);
+            ITransformer t2 = await NgramHashExtractingTransformer.CreateAsync(h, featurizeArgs, view);
 
             // Since we added columns with new names, we need to explicitly drop them before we return the IDataTransform.
             ITransformer t3 = new ColumnSelectingTransformer(env, null, tmpColNames.ToArray());
@@ -156,8 +157,8 @@ namespace Microsoft.ML.Transforms.Text
             return new TransformerChain<ITransformer>(new[] { t1, t2, t3 });
         }
 
-        internal static IDataTransform Create(IHostEnvironment env, Options options, IDataView input) =>
-            (IDataTransform)CreateTransformer(env, options, input).Transform(input);
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input) =>
+            (IDataTransform)(await CreateTransformerAsync(env, options, input)).Transform(input);
     }
 
     /// <summary>
@@ -319,7 +320,7 @@ namespace Microsoft.ML.Transforms.Text
 
         internal const string LoaderSignature = "NgramHashExtractor";
 
-        internal static ITransformer Create(IHostEnvironment env, Options options, IDataView input)
+        internal static async Task<ITransformer> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(LoaderSignature);
@@ -369,13 +370,13 @@ namespace Microsoft.ML.Transforms.Text
                 ngramHashColumns[iinfo].FriendlyNames = column.FriendlyNames;
             }
 
-            var hashing = new HashingEstimator(h, hashColumns.ToArray()).Fit(input);
+            var hashing = await new HashingEstimator(h, hashColumns.ToArray()).FitAsync(input);
             return chain.Append(hashing)
-                .Append(new NgramHashingEstimator(h, ngramHashColumns).Fit(hashing.Transform(input)))
+                .Append(await new NgramHashingEstimator(h, ngramHashColumns).FitAsync(hashing.Transform(input)))
                 .Append(new ColumnSelectingTransformer(h, null, tmpColNames.SelectMany(cols => cols).ToArray()));
         }
 
-        internal static ITransformer Create(NgramHashExtractorArguments extractorArgs, IHostEnvironment env, IDataView input,
+        internal static async Task<ITransformer> CreateAsync(NgramHashExtractorArguments extractorArgs, IHostEnvironment env, IDataView input,
             ExtractorColumn[] cols)
         {
             Contracts.CheckValue(env, nameof(env));
@@ -409,7 +410,7 @@ namespace Microsoft.ML.Transforms.Text
                 UseAllLengths = extractorArgs.UseAllLengths
             };
 
-            return Create(h, options, input);
+            return await CreateAsync(h, options, input);
         }
 
         internal static INgramExtractorFactory Create(IHostEnvironment env, NgramHashExtractorArguments extractorArgs,

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -187,14 +188,14 @@ namespace Microsoft.ML.Trainers
             Desc = "Train a Online gradient descent perceptron.",
             UserName = UserNameValue,
             ShortName = ShortName)]
-        internal static CommonOutputs.RegressionOutput TrainRegression(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.RegressionOutput> TrainRegressionAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainOGD");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.RegressionOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.RegressionOutput>(host, input,
                 () => new OnlineGradientDescentTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName));
         }

@@ -4,6 +4,7 @@
 
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
@@ -248,7 +249,7 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public override SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public override async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             var addedCols = DataViewConstructionUtils.GetSchemaColumns(Transformer.AddedSchema);
             var addedSchemaShape = SchemaShape.Create(SchemaExtensions.MakeSchema(addedCols));

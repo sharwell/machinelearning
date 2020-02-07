@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.Data;
@@ -82,7 +83,7 @@ namespace Microsoft.ML.Calibrators
         /// being present on the output, if it is present on the input score column.
         /// </summary>
         /// <param name="inputSchema">The input <see cref="SchemaShape"/>.</param>
-        SchemaShape IEstimator<CalibratorTransformer<TICalibrator>>.GetOutputSchema(SchemaShape inputSchema)
+        async Task<SchemaShape> IEstimator<CalibratorTransformer<TICalibrator>>.GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             Action<SchemaShape.Column, string> checkColumnValid = (SchemaShape.Column column, string columnRole) =>
             {
@@ -137,7 +138,7 @@ namespace Microsoft.ML.Calibrators
         /// <param name="input"></param>
         /// <returns>A trained <see cref="CalibratorTransformer{TICalibrator}"/> that will transform the data by adding the
         /// <see cref="DefaultColumnNames.Probability"/> column.</returns>
-        public CalibratorTransformer<TICalibrator> Fit(IDataView input)
+        public async ITask<CalibratorTransformer<TICalibrator>> FitAsync(IDataView input)
         {
             using (var ch = Host.Start("Creating calibrator."))
             {
@@ -155,7 +156,7 @@ namespace Microsoft.ML.Calibrators
     }
 
     /// <summary>
-    /// An instance of this class is the result of calling <see cref="CalibratorEstimatorBase{TICalibrator}.Fit(IDataView)"/>.
+    /// An instance of this class is the result of calling <see cref="CalibratorEstimatorBase{TICalibrator}.FitAsync(IDataView)"/>.
     /// If you pass a scored data, to the <see cref="CalibratorTransformer{TICalibrator}"/> Transform method, it will add the Probability column
     /// to the dataset. The Probability column is the value of the Score normalized to be a valid probability.
     /// The <see cref="CalibratorTransformer{TICalibrator}"/> is an instance of <see cref="ISingleFeaturePredictionTransformer{TModel}"/>

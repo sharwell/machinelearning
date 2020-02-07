@@ -2,13 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
 using Microsoft.ML.Runtime;
 
 namespace Microsoft.ML.Data
 {
     /// <summary>
     /// The trivial implementation of <see cref="IEstimator{TTransformer}"/> that already has
-    /// the transformer and returns it on every call to <see cref="Fit(IDataView)"/>.
+    /// the transformer and returns it on every call to <see cref="FitAsync(IDataView)"/>.
     ///
     /// Concrete implementations still have to provide the schema propagation mechanism, since
     /// there is no easy way to infer it from the transformer.
@@ -31,7 +32,7 @@ namespace Microsoft.ML.Data
             Transformer = transformer;
         }
 
-        public TTransformer Fit(IDataView input)
+        public async ITask<TTransformer> FitAsync(IDataView input)
         {
             Host.CheckValue(input, nameof(input));
             // Validate input schema.
@@ -39,6 +40,6 @@ namespace Microsoft.ML.Data
             return Transformer;
         }
 
-        public abstract SchemaShape GetOutputSchema(SchemaShape inputSchema);
+        public abstract Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema);
     }
 }

@@ -8,6 +8,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -951,7 +952,7 @@ namespace Microsoft.ML.Transforms.Text
         /// <summary>
         /// Trains and returns a <see cref="NgramExtractingTransformer"/>.
         /// </summary>
-        public NgramExtractingTransformer Fit(IDataView input) => new NgramExtractingTransformer(_host, input, _columns);
+        public async ITask<NgramExtractingTransformer> FitAsync(IDataView input) => new NgramExtractingTransformer(_host, input, _columns);
 
         internal static bool IsColumnTypeValid(DataViewType type)
         {
@@ -1072,7 +1073,7 @@ namespace Microsoft.ML.Transforms.Text
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var result = inputSchema.ToDictionary(x => x.Name);

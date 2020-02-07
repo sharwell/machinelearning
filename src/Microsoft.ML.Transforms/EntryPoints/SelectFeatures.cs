@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.EntryPoints;
 using Microsoft.ML.Runtime;
@@ -16,14 +17,14 @@ namespace Microsoft.ML.Transforms
         [TlcModule.EntryPoint(Name = "Transforms.FeatureSelectorByCount",
             Desc = CountFeatureSelectingEstimator.Summary,
             UserName = CountFeatureSelectingEstimator.UserName)]
-        public static CommonOutputs.TransformOutput CountSelect(IHostEnvironment env, CountFeatureSelectingEstimator.Options input)
+        public static async Task<CommonOutputs.TransformOutput> CountSelectAsync(IHostEnvironment env, CountFeatureSelectingEstimator.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("CountSelect");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = CountFeatureSelectingEstimator.Create(host, input, input.Data);
+            var xf = await CountFeatureSelectingEstimator.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
 
@@ -31,14 +32,14 @@ namespace Microsoft.ML.Transforms
             Desc = MutualInformationFeatureSelectingEstimator.Summary,
             UserName = MutualInformationFeatureSelectingEstimator.UserName,
             ShortName = MutualInformationFeatureSelectingEstimator.ShortName)]
-        public static CommonOutputs.TransformOutput MutualInformationSelect(IHostEnvironment env, MutualInformationFeatureSelectingEstimator.Options input)
+        public static async Task<CommonOutputs.TransformOutput> MutualInformationSelectAsync(IHostEnvironment env, MutualInformationFeatureSelectingEstimator.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("MutualInformationSelect");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            var xf = MutualInformationFeatureSelectingEstimator.Create(host, input, input.Data);
+            var xf = await MutualInformationFeatureSelectingEstimator.CreateAsync(host, input, input.Data);
             return new CommonOutputs.TransformOutput { Model = new TransformModelImpl(env, xf, input.Data), OutputData = xf };
         }
     }

@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -76,7 +77,7 @@ namespace Microsoft.ML.Tools
         }
 
         // REVIEW: Use the _env to emit messages instead of console.
-        public void Run()
+        public async Task RunAsync()
         {
             using (var file = _host.OpenInputFile(_args.InputModelFile))
             using (var strm = file.OpenReadStream())

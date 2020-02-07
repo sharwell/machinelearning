@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
@@ -210,14 +211,14 @@ namespace Microsoft.ML.Trainers
              Desc = Summary,
              UserName = UserNameValue,
              ShortName = ShortName)]
-        internal static CommonOutputs.BinaryClassificationOutput TrainBinary(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainBinaryAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainAP");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
                 () => new AveragedPerceptronTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 calibrator: input.Calibrator, maxCalibrationExamples: input.MaxCalibrationExamples);

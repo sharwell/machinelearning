@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -56,17 +57,17 @@ namespace Microsoft.ML.Data
         {
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             using (var ch = Host.Start(LoadName))
             {
-                RunCore(ch);
+                await RunCoreAsync(ch);
             }
         }
 
-        private void RunCore(IChannel ch)
+        private async Task RunCoreAsync(IChannel ch)
         {
-            ILegacyDataLoader loader = CreateAndSaveLoader();
+            ILegacyDataLoader loader = await CreateAndSaveLoaderAsync();
             using (var schemaWriter = new StringWriter())
             {
                 RunOnData(schemaWriter, ImplOptions, loader);

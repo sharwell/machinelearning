@@ -148,19 +148,19 @@ namespace Microsoft.ML.Trainers
             _options.UseProbabilities = useProbabilities;
         }
 
-        private protected override OneVersusAllModelParameters TrainCore(IChannel ch, RoleMappedData data, int count)
+        private protected override async Task<OneVersusAllModelParameters> TrainCoreAsync(IChannel ch, RoleMappedData data, int count)
         {
             // Train one-vs-all models.
             var predictors = new TScalarPredictor[count];
             for (int i = 0; i < predictors.Length; i++)
             {
                 ch.Info($"Training learner {i}");
-                predictors[i] = TrainOne(ch, Trainer, data, i).Model;
+                predictors[i] = (await TrainOneAsync(ch, Trainer, data, i)).Model;
             }
             return OneVersusAllModelParameters.Create(Host, _options.UseProbabilities, predictors);
         }
 
-        private ISingleFeaturePredictionTransformer<TScalarPredictor> TrainOne(IChannel ch, TScalarTrainer trainer, RoleMappedData data, int cls)
+        private async Task<ISingleFeaturePredictionTransformer<TScalarPredictor>> TrainOneAsync(IChannel ch, TScalarTrainer trainer, RoleMappedData data, int cls)
         {
             var view = MapLabels(data, cls);
 
@@ -168,7 +168,7 @@ namespace Microsoft.ML.Trainers
 
             // REVIEW: In principle we could support validation sets and the like via the train context, but
             // this is currently unsupported.
-            var transformer = trainer.Fit(view);
+            var transformer = await trainer.FitAsync(view);
 
             if (_options.UseProbabilities)
             {
@@ -207,7 +207,7 @@ namespace Microsoft.ML.Trainers
         /// <summary> Trains a <see cref="MulticlassPredictionTransformer{OneVersusAllModelParameters}"/> model.</summary>
         /// <param name="input">The input data.</param>
         /// <returns>A <see cref="MulticlassPredictionTransformer{OneVersusAllModelParameters}"/> model./></returns>
-        public override MulticlassPredictionTransformer<OneVersusAllModelParameters> Fit(IDataView input)
+        public override async ITask<MulticlassPredictionTransformer<OneVersusAllModelParameters>> FitAsync(IDataView input)
         {
             var roles = new KeyValuePair<CR, string>[1];
             roles[0] = new KeyValuePair<CR, string>(new CR(DefaultColumnNames.Label), LabelColumn.Name);
@@ -226,11 +226,11 @@ namespace Microsoft.ML.Trainers
 
                     if (i == 0)
                     {
-                        var transformer = TrainOne(ch, Trainer, td, i);
+                        var transformer = await TrainOneAsync(ch, Trainer, td, i);
                         featureColumn = transformer.FeatureColumnName;
                     }
 
-                    predictors[i] = TrainOne(ch, Trainer, td, i).Model;
+                    predictors[i] = (await TrainOneAsync(ch, Trainer, td, i)).Model;
                 }
             }
 

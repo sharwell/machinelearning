@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.Command;
@@ -92,7 +93,7 @@ namespace Microsoft.ML.Data
                 throw Host.ExceptUserArg(nameof(args.TestFile), "Test file must be defined.");
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             using (var ch = Host.Start(LoadName))
             using (var server = InitServer(ch))
@@ -105,7 +106,7 @@ namespace Microsoft.ML.Data
 
                 using (new TimerScope(Host, ch))
                 {
-                    RunCore(ch, cmd);
+                    await RunCoreAsync(ch, cmd);
                 }
             }
         }
@@ -116,7 +117,7 @@ namespace Microsoft.ML.Data
             base.SendTelemetryCore(pipe);
         }
 
-        private void RunCore(IChannel ch, string cmd)
+        private async Task RunCoreAsync(IChannel ch, string cmd)
         {
             Host.AssertValue(ch);
             Host.AssertNonEmpty(cmd);
@@ -129,7 +130,7 @@ namespace Microsoft.ML.Data
                 ch.Warning("No input model file specified or model file did not contain a predictor. The model state cannot be initialized.");
 
             ch.Trace("Constructing the training pipeline");
-            IDataView trainPipe = CreateLoader();
+            IDataView trainPipe = await CreateLoaderAsync();
 
             var schema = trainPipe.Schema;
             string label = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(Arguments.LabelColumn),
@@ -143,7 +144,7 @@ namespace Microsoft.ML.Data
             string name = TrainUtils.MatchNameOrDefaultOrNull(ch, schema, nameof(Arguments.NameColumn),
                 ImplOptions.NameColumn, DefaultColumnNames.Name);
 
-            TrainUtils.AddNormalizerIfNeeded(Host, ch, trainer, ref trainPipe, features, ImplOptions.NormalizeFeatures);
+            (_, trainPipe) = await TrainUtils.AddNormalizerIfNeededAsync(Host, ch, trainer, trainPipe, features, ImplOptions.NormalizeFeatures);
 
             ch.Trace("Binding columns");
             var customCols = TrainUtils.CheckAndGenerateCustomColumns(ch, ImplOptions.CustomColumns);
@@ -159,7 +160,7 @@ namespace Microsoft.ML.Data
                 else
                 {
                     ch.Trace("Constructing the validation pipeline");
-                    IDataView validPipe = CreateRawLoader(dataFile: ImplOptions.ValidationFile);
+                    IDataView validPipe = await CreateRawLoaderAsync(dataFile: ImplOptions.ValidationFile);
                     validPipe = ApplyTransformUtils.ApplyAllTransformsToData(Host, trainPipe, validPipe);
                     validData = new RoleMappedData(validPipe, data.Schema.GetColumnRoleNames());
                 }
@@ -177,13 +178,13 @@ namespace Microsoft.ML.Data
                 if (trainer.Info.SupportsTest)
                 {
                     ch.Trace("Constructing the test pipeline");
-                    IDataView testPipeUsedInTrainer = CreateRawLoader(dataFile: ImplOptions.TestFile);
+                    IDataView testPipeUsedInTrainer = await CreateRawLoaderAsync(dataFile: ImplOptions.TestFile);
                     testPipeUsedInTrainer = ApplyTransformUtils.ApplyAllTransformsToData(Host, trainPipe, testPipeUsedInTrainer);
                     testDataUsedInTrainer = new RoleMappedData(testPipeUsedInTrainer, data.Schema.GetColumnRoleNames());
                 }
             }
 
-            var predictor = TrainUtils.Train(Host, ch, data, trainer, validData,
+            var predictor = await TrainUtils.TrainAsync(Host, ch, data, trainer, validData,
                 ImplOptions.Calibrator, ImplOptions.MaxCalibrationExamples, ImplOptions.CacheData, inputPredictor, testDataUsedInTrainer);
 
             ILegacyDataLoader testPipe;

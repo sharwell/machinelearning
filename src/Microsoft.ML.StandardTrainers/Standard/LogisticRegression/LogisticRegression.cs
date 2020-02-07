@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
@@ -184,8 +185,8 @@ namespace Microsoft.ML.Trainers
         /// Continues the training of a <see cref="LbfgsLogisticRegressionBinaryTrainer"/> using an already trained <paramref name="modelParameters"/> and returns
         /// a <see cref="BinaryPredictionTransformer{CalibratedModelParametersBase}"/>.
         /// </summary>
-        public BinaryPredictionTransformer<CalibratedModelParametersBase<LinearBinaryModelParameters, PlattCalibrator>> Fit(IDataView trainData, LinearModelParameters modelParameters)
-            => TrainTransformer(trainData, initPredictor: modelParameters);
+        public async Task<BinaryPredictionTransformer<CalibratedModelParametersBase<LinearBinaryModelParameters, PlattCalibrator>>> FitAsync(IDataView trainData, LinearModelParameters modelParameters)
+            => await TrainTransformerAsync(trainData, initPredictor: modelParameters);
 
         private protected override float AccumulateOneGradient(in VBuffer<float> feat, float label, float weight,
             in VBuffer<float> x, ref VBuffer<float> grad, ref float[] scratch)
@@ -463,14 +464,14 @@ namespace Microsoft.ML.Trainers
             UserName = UserNameValue,
             ShortName = ShortName)]
 
-        internal static CommonOutputs.BinaryClassificationOutput TrainBinary(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainBinaryAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainLRBinary");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
                 () => new LbfgsLogisticRegressionBinaryTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.ExampleWeightColumnName));

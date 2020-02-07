@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.EntryPoints;
@@ -131,8 +132,8 @@ namespace Microsoft.ML.Trainers
         /// Continues the training of a <see cref="LbfgsPoissonRegressionTrainer"/> using an already trained <paramref name="linearModel"/> and returns
         /// a <see cref="RegressionPredictionTransformer{PoissonRegressionModelParameters}"/>.
         /// </summary>
-        public RegressionPredictionTransformer<PoissonRegressionModelParameters> Fit(IDataView trainData, LinearModelParameters linearModel)
-            => TrainTransformer(trainData, initPredictor: linearModel);
+        public async Task<RegressionPredictionTransformer<PoissonRegressionModelParameters>> FitAsync(IDataView trainData, LinearModelParameters linearModel)
+            => await TrainTransformerAsync(trainData, initPredictor: linearModel);
 
         private protected override VBuffer<float> InitializeWeightsFromPredictor(IPredictor srcPredictor)
         {
@@ -209,14 +210,14 @@ namespace Microsoft.ML.Trainers
             Desc = "Train an Poisson regression model.",
             UserName = UserNameValue,
             ShortName = ShortName)]
-        internal static CommonOutputs.RegressionOutput TrainRegression(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.RegressionOutput> TrainRegressionAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainPoisson");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.RegressionOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.RegressionOutput>(host, input,
                 () => new LbfgsPoissonRegressionTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.ExampleWeightColumnName));

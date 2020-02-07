@@ -2150,7 +2150,7 @@ namespace Microsoft.ML.Data.IO
                     (ver >> 32) & 0xffff, (ver >> 16) & 0xffff, ver & 0xffff);
             }
 
-            public void Run()
+            public async Task RunAsync()
             {
                 var host = _env.Register(LoadName);
                 var data = new MultiFileSource(_dataFile);

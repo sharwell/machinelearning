@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -166,7 +167,7 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Trains and returns a <see cref="ITransformer"/>.
         /// </summary>
-        public ITransformer Fit(IDataView input)
+        public async ITask<ITransformer> FitAsync(IDataView input)
         {
             _host.CheckValue(input, nameof(input));
             using (var ch = _host.Start("Selecting Slots"))
@@ -216,7 +217,7 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
 
@@ -255,7 +256,7 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Create method corresponding to SignatureDataTransform.
         /// </summary>
-        internal static IDataTransform Create(IHostEnvironment env, Options options, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register(RegistrationName);
@@ -267,7 +268,7 @@ namespace Microsoft.ML.Transforms
             host.Check(options.NumBins > 1, "numBins must be greater than 1.");
 
             (string outputColumnName, string inputColumnName)[] cols = options.Columns.Select(col => (col, col)).ToArray();
-            return new MutualInformationFeatureSelectingEstimator(env, options.LabelColumnName, options.SlotsInOutput, options.NumBins, cols).Fit(input).Transform(input) as IDataTransform;
+            return (await new MutualInformationFeatureSelectingEstimator(env, options.LabelColumnName, options.SlotsInOutput, options.NumBins, cols).FitAsync(input)).Transform(input) as IDataTransform;
         }
 
         /// <summary>

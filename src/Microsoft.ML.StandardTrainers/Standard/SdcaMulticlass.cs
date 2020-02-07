@@ -5,6 +5,7 @@
 using System;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -672,14 +673,14 @@ namespace Microsoft.ML.Trainers
             Desc = SdcaMaximumEntropyMulticlassTrainer.Summary,
             UserName = SdcaMaximumEntropyMulticlassTrainer.UserNameValue,
             ShortName = SdcaMaximumEntropyMulticlassTrainer.ShortName)]
-        public static CommonOutputs.MulticlassClassificationOutput TrainMulticlass(IHostEnvironment env, SdcaMaximumEntropyMulticlassTrainer.Options input)
+        public static async Task<CommonOutputs.MulticlassClassificationOutput> TrainMulticlassAsync(IHostEnvironment env, SdcaMaximumEntropyMulticlassTrainer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainSDCA");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<SdcaMaximumEntropyMulticlassTrainer.Options, CommonOutputs.MulticlassClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<SdcaMaximumEntropyMulticlassTrainer.Options, CommonOutputs.MulticlassClassificationOutput>(host, input,
                 () => new SdcaMaximumEntropyMulticlassTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName));
         }

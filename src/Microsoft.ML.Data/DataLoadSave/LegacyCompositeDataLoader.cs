@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -91,7 +92,7 @@ namespace Microsoft.ML.Data
         /// If there are transforms, then the result will be a <see cref="LegacyCompositeDataLoader"/>,
         /// otherwise, it'll be whatever <see cref="ILegacyDataLoader"/> is specified in <c>args.loader</c>.
         /// </summary>
-        public static ILegacyDataLoader Create(IHostEnvironment env, Arguments args, IMultiStreamSource files)
+        public static async Task<ILegacyDataLoader> CreateAsync(IHostEnvironment env, Arguments args, IMultiStreamSource files)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(RegistrationName);
@@ -101,7 +102,7 @@ namespace Microsoft.ML.Data
             h.CheckValue(files, nameof(files));
 
             var loader = args.Loader.CreateComponent(h, files);
-            return CreateCore(h, loader, args.Transforms);
+            return await CreateCoreAsync(h, loader, args.Transforms);
         }
 
         /// <summary>
@@ -109,7 +110,7 @@ namespace Microsoft.ML.Data
         /// and follows with transforms created from the <paramref name="transformArgs"/> array.
         /// If there are no transforms, the <paramref name="srcLoader"/> is returned.
         /// </summary>
-        public static ILegacyDataLoader Create(IHostEnvironment env, ILegacyDataLoader srcLoader,
+        public static async Task<ILegacyDataLoader> CreateAsync(IHostEnvironment env, ILegacyDataLoader srcLoader,
             params KeyValuePair<string, IComponentFactory<IDataView, IDataTransform>>[] transformArgs)
         {
             Contracts.CheckValue(env, nameof(env));
@@ -117,10 +118,10 @@ namespace Microsoft.ML.Data
 
             h.CheckValue(srcLoader, nameof(srcLoader));
             h.CheckValueOrNull(transformArgs);
-            return CreateCore(h, srcLoader, transformArgs);
+            return await CreateCoreAsync(h, srcLoader, transformArgs);
         }
 
-        private static ILegacyDataLoader CreateCore(IHost host, ILegacyDataLoader srcLoader,
+        private static async Task<ILegacyDataLoader> CreateCoreAsync(IHost host, ILegacyDataLoader srcLoader,
             KeyValuePair<string, IComponentFactory<IDataView, IDataTransform>>[] transformArgs)
         {
             Contracts.AssertValue(host, "host");
@@ -155,8 +156,8 @@ namespace Microsoft.ML.Data
                 }
             }
 
-            return ApplyTransformsCore(host, srcLoader, tagData,
-                (env, index, data) => transformArgs[index].Value.CreateComponent(env, data));
+            return await ApplyTransformsCoreAsync(host, srcLoader, tagData,
+                async (env, index, data) => transformArgs[index].Value.CreateComponent(env, data));
         }
 
         /// <summary>
@@ -169,31 +170,31 @@ namespace Microsoft.ML.Data
         /// <param name="srcLoader">The source loader.</param>
         /// <param name="tagData">The array of (tag, creationInfo) pairs. Can be an empty array or null, in which case
         /// the function returns <paramref name="srcLoader"/>.</param>
-        /// <param name="createTransform">The delegate to invoke at each transform creation.
+        /// <param name="createTransformAsync">The delegate to invoke at each transform creation.
         /// Delegate parameters are: host environment, transform index (0 to <c>tagData.Length</c>), source data view.
         /// It should return the <see cref="IDataView"/> that should share the same loader as the source data view.</param>
         /// <returns>The resulting data loader.</returns>
-        public static ILegacyDataLoader ApplyTransforms(IHostEnvironment env, ILegacyDataLoader srcLoader,
-            KeyValuePair<string, string>[] tagData, Func<IHostEnvironment, int, IDataView, IDataView> createTransform)
+        public static async Task<ILegacyDataLoader> ApplyTransformsAsync(IHostEnvironment env, ILegacyDataLoader srcLoader,
+            KeyValuePair<string, string>[] tagData, Func<IHostEnvironment, int, IDataView, Task<IDataView>> createTransformAsync)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(RegistrationName);
 
             h.CheckValue(srcLoader, nameof(srcLoader));
             h.CheckValueOrNull(tagData);
-            h.CheckValue(createTransform, nameof(createTransform));
+            h.CheckValue(createTransformAsync, nameof(createTransformAsync));
             if (Utils.Size(tagData) == 0)
                 return srcLoader;
-            return ApplyTransformsCore(h, srcLoader, tagData, createTransform);
+            return await ApplyTransformsCoreAsync(h, srcLoader, tagData, createTransformAsync);
         }
 
-        private static ILegacyDataLoader ApplyTransformsCore(IHost host, ILegacyDataLoader srcLoader,
-            KeyValuePair<string, string>[] tagData, Func<IHostEnvironment, int, IDataView, IDataView> createTransform)
+        private static async Task<ILegacyDataLoader> ApplyTransformsCoreAsync(IHost host, ILegacyDataLoader srcLoader,
+            KeyValuePair<string, string>[] tagData, Func<IHostEnvironment, int, IDataView, Task<IDataView>> createTransformAsync)
         {
             Contracts.AssertValue(host, "host");
             host.AssertValue(srcLoader, "srcLoader");
             host.AssertNonEmpty(tagData);
-            host.AssertValue(createTransform, "createTransform");
+            host.AssertValue(createTransformAsync, nameof(createTransformAsync));
 
             // If the loader is a composite, we need to start with its underlying pipeline end.
             var exes = new List<TransformEx>();
@@ -222,7 +223,7 @@ namespace Microsoft.ML.Data
                     if (string.IsNullOrEmpty(tag))
                         tag = GenerateTag(exes.Count);
 
-                    var newDataView = createTransform(host, i, view);
+                    var newDataView = await createTransformAsync(host, i, view);
                     // Append the newly created transforms to the exes list.
                     // If the newTransform is a 'no-op' transform, i.e. equal to the original view,
                     // the exes array will not be modified: there's no reason to record details of a no-op transform,
@@ -272,8 +273,8 @@ namespace Microsoft.ML.Data
         /// The transform is created by invoking the lambda for a data source, and it should return an
         /// <see cref="IDataView"/> that shares the same loader as the provided source.
         /// </summary>
-        public static ILegacyDataLoader ApplyTransform(IHostEnvironment env, ILegacyDataLoader srcLoader,
-            string tag, string creationArgs, Func<IHostEnvironment, IDataView, IDataView> createTransform)
+        public static async Task<ILegacyDataLoader> ApplyTransformAsync(IHostEnvironment env, ILegacyDataLoader srcLoader,
+            string tag, string creationArgs, Func<IHostEnvironment, IDataView, Task<IDataView>> createTransformAsync)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(RegistrationName);
@@ -281,16 +282,16 @@ namespace Microsoft.ML.Data
             h.CheckValue(srcLoader, nameof(srcLoader));
             h.CheckValueOrNull(tag);
             h.CheckValueOrNull(creationArgs);
-            h.CheckValue(createTransform, nameof(createTransform));
+            h.CheckValue(createTransformAsync, nameof(createTransformAsync));
             var tagData = new[] { new KeyValuePair<string, string>(tag, creationArgs) };
-            return ApplyTransformsCore(env.Register(RegistrationName), srcLoader, tagData, (e, index, data) => createTransform(e, data));
+            return await ApplyTransformsCoreAsync(env.Register(RegistrationName), srcLoader, tagData, async (e, index, data) => await createTransformAsync(e, data));
         }
 
         /// <summary>
         /// Loads the entire composite data loader (loader + transforms) from the context.
         /// If there are no transforms, the underlying loader is returned.
         /// </summary>
-        public static ILegacyDataLoader Create(IHostEnvironment env, ModelLoadContext ctx, IMultiStreamSource files)
+        public static async Task<ILegacyDataLoader> CreateAsync(IHostEnvironment env, ModelLoadContext ctx, IMultiStreamSource files)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register(RegistrationName);
@@ -307,7 +308,7 @@ namespace Microsoft.ML.Data
 
                 // Now the transforms.
                 h.Assert(!(loader is LegacyCompositeDataLoader));
-                return LoadTransforms(ctx, loader, h, x => true);
+                return await LoadTransformsAsync(ctx, loader, h, x => true);
             }
         }
 
@@ -318,7 +319,7 @@ namespace Microsoft.ML.Data
         /// If the <paramref name="ctx"/> contains no accepted transforms, the <paramref name="srcLoader"/> is
         /// returned intact.
         /// </summary>
-        public static ILegacyDataLoader Create(IHostEnvironment env, ModelLoadContext ctx,
+        public static async Task<ILegacyDataLoader> CreateAsync(IHostEnvironment env, ModelLoadContext ctx,
             ILegacyDataLoader srcLoader, Func<string, bool> isTransformTagAccepted)
         {
             Contracts.CheckValue(env, nameof(env));
@@ -329,7 +330,7 @@ namespace Microsoft.ML.Data
             h.CheckValue(srcLoader, nameof(srcLoader));
             h.CheckValue(isTransformTagAccepted, nameof(isTransformTagAccepted));
 
-            return LoadTransforms(ctx, srcLoader, h, isTransformTagAccepted);
+            return await LoadTransformsAsync(ctx, srcLoader, h, isTransformTagAccepted);
         }
 
         /// <summary>
@@ -447,7 +448,7 @@ namespace Microsoft.ML.Data
         /// Loads all transforms from the <paramref name="ctx"/> that pass the <paramref name="isTransformTagAccepted"/> test,
         /// applies them sequentially to the <paramref name="srcLoader"/>, and returns the (composite) data loader.
         /// </summary>
-        private static ILegacyDataLoader LoadTransforms(ModelLoadContext ctx, ILegacyDataLoader srcLoader, IHost host, Func<string, bool> isTransformTagAccepted)
+        private static async Task<ILegacyDataLoader> LoadTransformsAsync(ModelLoadContext ctx, ILegacyDataLoader srcLoader, IHost host, Func<string, bool> isTransformTagAccepted)
         {
             Contracts.AssertValue(host, "host");
             host.AssertValue(srcLoader);
@@ -490,8 +491,8 @@ namespace Microsoft.ML.Data
             if (tagData.Count == 0)
                 return srcLoader;
 
-            return ApplyTransformsCore(host, srcLoader, tagData.ToArray(),
-                (h, index, data) =>
+            return await ApplyTransformsCoreAsync(host, srcLoader, tagData.ToArray(),
+                async (h, index, data) =>
                 {
                     IDataTransform xf;
                     ctx.LoadModel<IDataTransform, SignatureLoadDataTransform>(host, out xf,

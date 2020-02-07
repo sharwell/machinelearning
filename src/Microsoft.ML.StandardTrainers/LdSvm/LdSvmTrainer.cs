@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
@@ -147,7 +148,7 @@ namespace Microsoft.ML.Trainers
             };
         }
 
-        private protected override LdSvmModelParameters TrainModelCore(TrainContext trainContext)
+        private protected override async Task<LdSvmModelParameters> TrainModelCoreAsync(TrainContext trainContext)
         {
             Host.CheckValue(trainContext, nameof(trainContext));
             using (var ch = Host.Start("Training"))
@@ -627,14 +628,14 @@ namespace Microsoft.ML.Trainers
             => new BinaryPredictionTransformer<LdSvmModelParameters>(Host, model, trainSchema, _options.FeatureColumnName);
 
         [TlcModule.EntryPoint(Name = "Trainers.LocalDeepSvmBinaryClassifier", Desc = Summary, UserName = UserNameValue, ShortName = LoadNameValue)]
-        internal static CommonOutputs.BinaryClassificationOutput TrainBinary(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainBinaryAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainLDSVM");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
                 () => new LdSvmTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 calibrator: input.Calibrator, maxCalibrationExamples: input.MaxCalibrationExamples);

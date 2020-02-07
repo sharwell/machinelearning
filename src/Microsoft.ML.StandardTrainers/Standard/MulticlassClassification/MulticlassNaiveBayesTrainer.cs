@@ -5,6 +5,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.EntryPoints;
@@ -129,7 +131,7 @@ namespace Microsoft.ML.Trainers
         private protected override MulticlassPredictionTransformer<NaiveBayesMulticlassModelParameters> MakeTransformer(NaiveBayesMulticlassModelParameters model, DataViewSchema trainSchema)
             => new MulticlassPredictionTransformer<NaiveBayesMulticlassModelParameters>(Host, model, trainSchema, FeatureColumn.Name, LabelColumn.Name);
 
-        private protected override NaiveBayesMulticlassModelParameters TrainModelCore(TrainContext context)
+        private protected override async Task<NaiveBayesMulticlassModelParameters> TrainModelCoreAsync(TrainContext context)
         {
             Host.CheckValue(context, nameof(context));
             var data = context.TrainingSet;
@@ -173,24 +175,7 @@ namespace Microsoft.ML.Trainers
                     labelHistogram[cursor.Label] += 1;
                     labelCount = labelCount < size ? size : labelCount;
 
-                    var featureValues = cursor.Features.GetValues();
-                    if (cursor.Features.IsDense)
-                    {
-                        for (int i = 0; i < featureValues.Length; i += 1)
-                        {
-                            if (featureValues[i] > 0)
-                                featureHistogram[cursor.Label][i] += 1;
-                        }
-                    }
-                    else
-                    {
-                        var featureIndices = cursor.Features.GetIndices();
-                        for (int i = 0; i < featureValues.Length; i += 1)
-                        {
-                            if (featureValues[i] > 0)
-                                featureHistogram[cursor.Label][featureIndices[i]] += 1;
-                        }
-                    }
+                    updateHistogram(featureHistogram, cursor);
 
                     examplesProcessed += 1;
                 }
@@ -199,20 +184,43 @@ namespace Microsoft.ML.Trainers
             Array.Resize(ref labelHistogram, labelCount);
             Array.Resize(ref featureHistogram, labelCount);
             return new NaiveBayesMulticlassModelParameters(Host, labelHistogram, featureHistogram, featureCount);
+
+            // Local functions
+            static void updateHistogram(int[][] featureHistogram, MulticlassLabelCursor cursor)
+            {
+                var featureValues = cursor.Features.GetValues();
+                if (cursor.Features.IsDense)
+                {
+                    for (int i = 0; i < featureValues.Length; i += 1)
+                    {
+                        if (featureValues[i] > 0)
+                            featureHistogram[cursor.Label][i] += 1;
+                    }
+                }
+                else
+                {
+                    var featureIndices = cursor.Features.GetIndices();
+                    for (int i = 0; i < featureValues.Length; i += 1)
+                    {
+                        if (featureValues[i] > 0)
+                            featureHistogram[cursor.Label][featureIndices[i]] += 1;
+                    }
+                }
+            }
         }
 
         [TlcModule.EntryPoint(Name = "Trainers.NaiveBayesClassifier",
             Desc = "Train a MulticlassNaiveBayesTrainer.",
             UserName = UserName,
             ShortName = ShortName)]
-        internal static CommonOutputs.MulticlassClassificationOutput TrainMulticlassNaiveBayesTrainer(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.MulticlassClassificationOutput> TrainMulticlassNaiveBayesTrainerAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainMultiClassNaiveBayes");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.MulticlassClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.MulticlassClassificationOutput>(host, input,
                 () => new NaiveBayesMulticlassTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName));
         }

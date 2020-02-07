@@ -5,6 +5,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime;
 
@@ -251,13 +252,13 @@ namespace Microsoft.ML
         /// <summary>
         /// Train and return a data loader.
         /// </summary>
-        TLoader Fit(TSource input);
+        ITask<TLoader> FitAsync(TSource input);
 
         /// <summary>
         /// The 'promise' of the output schema.
         /// It will be used for schema propagation.
         /// </summary>
-        SchemaShape GetOutputSchema();
+        Task<SchemaShape> GetOutputSchemaAsync();
     }
 
     /// <summary>
@@ -305,12 +306,12 @@ namespace Microsoft.ML
         /// <summary>
         /// Train and return a transformer.
         /// </summary>
-        TTransformer Fit(IDataView input);
+        ITask<TTransformer> FitAsync(IDataView input);
 
         /// <summary>
         /// Schema propagation for estimators.
         /// Returns the output schema shape of the estimator, if the input schema shape is like the one provided.
         /// </summary>
-        SchemaShape GetOutputSchema(SchemaShape inputSchema);
+        Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema);
     }
 }

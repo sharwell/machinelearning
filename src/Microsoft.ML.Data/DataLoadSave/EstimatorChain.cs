@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
 
@@ -54,17 +55,17 @@ namespace Microsoft.ML.Data
             LastEstimator = null;
         }
 
-        public TransformerChain<TLastTransformer> Fit(IDataView input)
+        public async ITask<TransformerChain<TLastTransformer>> FitAsync(IDataView input)
         {
             // Before fitting, run schema propagation.
-            GetOutputSchema(SchemaShape.Create(input.Schema));
+            await GetOutputSchemaAsync(SchemaShape.Create(input.Schema));
 
             IDataView current = input;
             var xfs = new ITransformer[_estimators.Length];
             for (int i = 0; i < _estimators.Length; i++)
             {
                 var est = _estimators[i];
-                xfs[i] = est.Fit(current);
+                xfs[i] = await est.FitAsync(current);
                 current = xfs[i].Transform(current);
                 if (_needCacheAfter[i] && i < _estimators.Length - 1)
                 {
@@ -76,11 +77,11 @@ namespace Microsoft.ML.Data
             return new TransformerChain<TLastTransformer>(xfs, _scopes);
         }
 
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             var s = inputSchema;
             foreach (var est in _estimators)
-                s = est.GetOutputSchema(s);
+                s = await est.GetOutputSchemaAsync(s);
             return s;
         }
 

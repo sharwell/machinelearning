@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -432,7 +433,7 @@ namespace Microsoft.ML.Transforms.Text
         /// <summary>
         /// Trains and returns a <see cref="ITransformer"/>.
         /// </summary>
-        public ITransformer Fit(IDataView input)
+        public async ITask<ITransformer> FitAsync(IDataView input)
         {
             var h = _host;
             h.CheckValue(input, nameof(input));
@@ -466,8 +467,8 @@ namespace Microsoft.ML.Transforms.Text
                     xfCols[i] = (dstCols[i], textCols[i]);
                 }
                 chain = AddToChainAndTransform(chain,
-                    new TextNormalizingEstimator(h, tparams.TextCase, tparams.KeepDiacritics, tparams.KeepPunctuations,
-                    tparams.KeepNumbers, xfCols).Fit(view), ref view);
+                    await new TextNormalizingEstimator(h, tparams.TextCase, tparams.KeepDiacritics, tparams.KeepPunctuations,
+                    tparams.KeepNumbers, xfCols).FitAsync(view), ref view);
 
                 textCols = dstCols;
             }
@@ -484,7 +485,7 @@ namespace Microsoft.ML.Transforms.Text
                     tempCols.Add(col.Name);
                 }
 
-                chain = AddToChainAndTransform(chain, new WordTokenizingEstimator(h, xfCols).Fit(view), ref view);
+                chain = AddToChainAndTransform(chain, await new WordTokenizingEstimator(h, xfCols).FitAsync(view), ref view);
             }
 
             if (tparams.NeedsRemoveStopwordsTransform)
@@ -511,7 +512,7 @@ namespace Microsoft.ML.Transforms.Text
             {
                 var dstCol = GenerateColumnName(view.Schema, OutputColumn, "WordExtractor");
                 tempCols.Add(dstCol);
-                chain = AddToChainAndTransform(chain, tparams.WordExtractorFactory.Create(h, view, new[] {
+                chain = AddToChainAndTransform(chain, await tparams.WordExtractorFactory.CreateAsync(h, view, new[] {
                     new ExtractorColumn()
                     {
                         Name = dstCol,
@@ -542,7 +543,7 @@ namespace Microsoft.ML.Transforms.Text
 
                 charFeatureCol = GenerateColumnName(view.Schema, OutputColumn, "CharExtractor");
                 tempCols.Add(charFeatureCol);
-                chain = AddToChainAndTransform(chain, tparams.CharExtractorFactory.Create(h, view, new[] {
+                chain = AddToChainAndTransform(chain, await tparams.CharExtractorFactory.CreateAsync(h, view, new[] {
                     new ExtractorColumn()
                     {
                         Source = charTokCols,
@@ -628,7 +629,7 @@ namespace Microsoft.ML.Transforms.Text
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var result = inputSchema.ToDictionary(x => x.Name);
@@ -658,7 +659,7 @@ namespace Microsoft.ML.Transforms.Text
         }
 
         // Factory method for SignatureDataTransform.
-        internal static IDataTransform Create(IHostEnvironment env, Options args, IDataView data)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options args, IDataView data)
         {
             var estimator = new TextFeaturizingEstimator(env, args.Columns.Name, args.Columns.Source ?? new[] { args.Columns.Name }, args);
             estimator._stopWordsRemover = args.StopWordsRemover;
@@ -666,7 +667,7 @@ namespace Microsoft.ML.Transforms.Text
             // Review: I don't think the following two lines are needed.
             estimator._wordFeatureExtractor = args.WordFeatureExtractorFactory;
             estimator._charFeatureExtractor = args.CharFeatureExtractorFactory;
-            return estimator.Fit(data).Transform(data) as IDataTransform;
+            return (await estimator.FitAsync(data)).Transform(data) as IDataTransform;
         }
 
         private sealed class Transformer : ITransformer

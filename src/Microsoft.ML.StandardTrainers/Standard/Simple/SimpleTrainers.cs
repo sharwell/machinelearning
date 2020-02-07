@@ -4,6 +4,7 @@
 
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Internal.Utilities;
@@ -240,10 +241,10 @@ namespace Microsoft.ML.Trainers
         /// <summary>
         /// Trains and returns a <see cref="BinaryPredictionTransformer{PriorModelParameters}"/>.
         /// </summary>
-        public BinaryPredictionTransformer<PriorModelParameters> Fit(IDataView input)
+        public async ITask<BinaryPredictionTransformer<PriorModelParameters>> FitAsync(IDataView input)
         {
             RoleMappedData trainRoles = new RoleMappedData(input, label: _labelColumnName, feature: null, weight: _weightColumnName);
-            var pred = ((ITrainer<PriorModelParameters>)this).Train(new TrainContext(trainRoles));
+            var pred = await ((ITrainer<PriorModelParameters>)this).TrainAsync(new TrainContext(trainRoles));
             return new BinaryPredictionTransformer<PriorModelParameters>(_host, pred, input.Schema, featureColumn: null, labelColumn: _labelColumnName);
         }
 
@@ -293,9 +294,9 @@ namespace Microsoft.ML.Trainers
             return new PriorModelParameters(_host, prob);
         }
 
-        IPredictor ITrainer.Train(TrainContext context) => Train(context);
+        async Task<IPredictor> ITrainer.TrainAsync(TrainContext context) => Train(context);
 
-        PriorModelParameters ITrainer<PriorModelParameters>.Train(TrainContext context) => Train(context);
+        async Task<PriorModelParameters> ITrainer<PriorModelParameters>.TrainAsync(TrainContext context) => Train(context);
 
         private static SchemaShape.Column MakeFeatureColumn(string featureColumn)
             => new SchemaShape.Column(featureColumn, SchemaShape.Column.VectorKind.Vector, NumberDataViewType.Single, false);
@@ -307,7 +308,7 @@ namespace Microsoft.ML.Trainers
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
 

@@ -123,7 +123,7 @@ namespace Microsoft.ML.Trainers
             Host.CheckValue(labelColumnName, nameof(labelColumnName), "Label column should not be null.");
         }
 
-        private protected override PairwiseCouplingModelParameters TrainCore(IChannel ch, RoleMappedData data, int count)
+        private protected override async Task<PairwiseCouplingModelParameters> TrainCoreAsync(IChannel ch, RoleMappedData data, int count)
         {
             // Train M * (M+1) / 2 models arranged as a lower triangular matrix.
             var predModels = new TDistPredictor[count][];
@@ -135,21 +135,21 @@ namespace Microsoft.ML.Trainers
                 for (int j = 0; j <= i; j++)
                 {
                     ch.Info($"Training learner ({i},{j})");
-                    predModels[i][j] = TrainOne(ch, Trainer, data, i, j).Model;
+                    predModels[i][j] = (await TrainOneAsync(ch, Trainer, data, i, j)).Model;
                 }
             }
 
             return new PairwiseCouplingModelParameters(Host, predModels);
         }
 
-        private ISingleFeaturePredictionTransformer<TDistPredictor> TrainOne(IChannel ch, TScalarTrainer trainer, RoleMappedData data, int cls1, int cls2)
+        private async Task<ISingleFeaturePredictionTransformer<TDistPredictor>> TrainOneAsync(IChannel ch, TScalarTrainer trainer, RoleMappedData data, int cls1, int cls2)
         {
             // this should not be necessary when the legacy constructor doesn't exist, and the label column is not an optional parameter on the
             // MetaMulticlassTrainer constructor.
             string trainerLabel = data.Schema.Label.Value.Name;
 
             var view = MapLabels(data, cls1, cls2);
-            var transformer = trainer.Fit(view);
+            var transformer = await trainer.FitAsync(view);
 
             // the validations in the calibrator check for the feature column, in the RoleMappedData
             var trainedData = new RoleMappedData(view, label: trainerLabel, feature: transformer.FeatureColumnName);
@@ -183,7 +183,7 @@ namespace Microsoft.ML.Trainers
         /// </summary>
         /// <param name="input">The input data.</param>
         /// <returns>The trained predictor.</returns>
-        public override TTransformer Fit(IDataView input)
+        public override async ITask<TTransformer> FitAsync(IDataView input)
         {
             string featureColumn = null;
 
@@ -208,11 +208,11 @@ namespace Microsoft.ML.Trainers
                         // need to capture the featureColum, and it is the same for all the transformers
                         if (i == 0 && j == 0)
                         {
-                            var transformer = TrainOne(ch, Trainer, td, i, j);
+                            var transformer = await TrainOneAsync(ch, Trainer, td, i, j);
                             featureColumn = transformer.FeatureColumnName;
                         }
 
-                        predictors[i][j] = TrainOne(ch, Trainer, td, i, j).Model;
+                        predictors[i][j] = (await TrainOneAsync(ch, Trainer, td, i, j)).Model;
                     }
                 }
             }

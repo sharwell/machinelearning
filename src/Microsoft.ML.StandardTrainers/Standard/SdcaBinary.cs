@@ -65,7 +65,7 @@ namespace Microsoft.ML.Trainers
         {
         }
 
-        private protected override TModel TrainModelCore(TrainContext context)
+        private protected override async Task<TModel> TrainModelCoreAsync(TrainContext context)
         {
             Host.CheckValue(context, nameof(context));
             using (var ch = Host.Start("Training"))
@@ -2000,8 +2000,8 @@ namespace Microsoft.ML.Trainers
         /// <summary>
         /// Continues the training of a <see cref="SdcaLogisticRegressionBinaryTrainer"/> using an already trained <paramref name="modelParameters"/> and returns a <see cref="BinaryPredictionTransformer"/>.
         /// </summary>
-        public BinaryPredictionTransformer<TModel> Fit(IDataView trainData, LinearModelParameters modelParameters)
-            => TrainTransformer(trainData, initPredictor: modelParameters);
+        public async Task<BinaryPredictionTransformer<TModel>> FitAsync(IDataView trainData, LinearModelParameters modelParameters)
+            => await TrainTransformerAsync(trainData, initPredictor: modelParameters);
 
         //For complexity analysis, we assume that
         // - The number of features is N
@@ -2454,14 +2454,14 @@ namespace Microsoft.ML.Trainers
         }
 
         [TlcModule.EntryPoint(Name = "Trainers.StochasticGradientDescentBinaryClassifier", Desc = "Train an Hogwild SGD binary model.", UserName = UserNameValue, ShortName = ShortName)]
-        internal static CommonOutputs.BinaryClassificationOutput TrainBinary(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainBinaryAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainHogwildSGD");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
                 () => new LegacySgdBinaryTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.ExampleWeightColumnName),
@@ -2478,14 +2478,14 @@ namespace Microsoft.ML.Trainers
             Desc = "Train an SDCA binary model.",
             UserName = LegacySdcaBinaryTrainer.UserNameValue,
             ShortName = LegacySdcaBinaryTrainer.LoadNameValue)]
-        internal static CommonOutputs.BinaryClassificationOutput TrainBinary(IHostEnvironment env, LegacySdcaBinaryTrainer.Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainBinaryAsync(IHostEnvironment env, LegacySdcaBinaryTrainer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainSDCA");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<LegacySdcaBinaryTrainer.Options, CommonOutputs.BinaryClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<LegacySdcaBinaryTrainer.Options, CommonOutputs.BinaryClassificationOutput>(host, input,
                 () => new LegacySdcaBinaryTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 calibrator: input.Calibrator, maxCalibrationExamples: input.MaxCalibrationExamples);

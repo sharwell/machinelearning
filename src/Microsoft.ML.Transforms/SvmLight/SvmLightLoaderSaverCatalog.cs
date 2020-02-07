@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Runtime;
 
 namespace Microsoft.ML.Data
@@ -27,12 +28,12 @@ namespace Microsoft.ML.Data
         /// ]]>
         /// </format>
         /// </example>
-        public static SvmLightLoader CreateSvmLightLoader(this DataOperationsCatalog catalog,
+        public static async Task<SvmLightLoader> CreateSvmLightLoaderAsync(this DataOperationsCatalog catalog,
             long? numberOfRows = null,
             int inputSize = 0,
             bool zeroBased = false,
             IMultiStreamSource dataSample = null)
-            => new SvmLightLoader(CatalogUtils.GetEnvironment(catalog), new SvmLightLoader.Options()
+            => await SvmLightLoader.CreateAsync(CatalogUtils.GetEnvironment(catalog), new SvmLightLoader.Options()
             { InputSize = inputSize, NumberOfRows = numberOfRows, FeatureIndices = zeroBased ?
                 SvmLightLoader.FeatureIndices.ZeroBased : SvmLightLoader.FeatureIndices.OneBased }, dataSample);
 
@@ -42,10 +43,10 @@ namespace Microsoft.ML.Data
         /// <param name="catalog">The <see cref="DataOperationsCatalog"/> catalog.</param>
         /// <param name="numberOfRows">The number of rows from the sample to be used for determining the set of feature names.</param>
         /// <param name="dataSample">A data sample to be used for determining the set of features names.</param>
-        public static SvmLightLoader CreateSvmLightLoaderWithFeatureNames(this DataOperationsCatalog catalog,
+        public static async Task<SvmLightLoader> CreateSvmLightLoaderWithFeatureNamesAsync(this DataOperationsCatalog catalog,
             long? numberOfRows = null,
             IMultiStreamSource dataSample = null)
-            => new SvmLightLoader(CatalogUtils.GetEnvironment(catalog), new SvmLightLoader.Options()
+            => await SvmLightLoader.CreateAsync(CatalogUtils.GetEnvironment(catalog), new SvmLightLoader.Options()
             { NumberOfRows = numberOfRows, FeatureIndices = SvmLightLoader.FeatureIndices.Names }, dataSample);
 
         /// <summary>
@@ -58,7 +59,7 @@ namespace Microsoft.ML.Data
         /// <param name="zeroBased">If the file contains zero-based indices, this parameter should be set to true. If they are one-based
         /// it should be set to false.</param>
         /// <param name="numberOfRows">The number of rows from the sample to be used for determining the number of features.</param>
-        public static IDataView LoadFromSvmLightFile(this DataOperationsCatalog catalog,
+        public static async Task<IDataView> LoadFromSvmLightFileAsync(this DataOperationsCatalog catalog,
             string path,
             long? numberOfRows = null,
             int inputSize = 0,
@@ -71,7 +72,7 @@ namespace Microsoft.ML.Data
             }
 
             var file = new MultiFileSource(path);
-            var loader = catalog.CreateSvmLightLoader(numberOfRows, inputSize, zeroBased, file);
+            var loader = await catalog.CreateSvmLightLoaderAsync(numberOfRows, inputSize, zeroBased, file);
             return loader.Load(file);
         }
 
@@ -82,7 +83,7 @@ namespace Microsoft.ML.Data
         /// <param name="catalog">The <see cref="DataOperationsCatalog"/> catalog.</param>
         /// <param name="path">The path to the file.</param>
         /// <param name="numberOfRows">The number of rows from the sample to be used for determining the set of feature names.</param>
-        public static IDataView LoadFromSvmLightFileWithFeatureNames(this DataOperationsCatalog catalog,
+        public static async Task<IDataView> LoadFromSvmLightFileWithFeatureNamesAsync(this DataOperationsCatalog catalog,
             string path,
             long? numberOfRows = null)
         {
@@ -93,7 +94,7 @@ namespace Microsoft.ML.Data
             }
 
             var file = new MultiFileSource(path);
-            var loader = catalog.CreateSvmLightLoaderWithFeatureNames(numberOfRows, file);
+            var loader = await catalog.CreateSvmLightLoaderWithFeatureNamesAsync(numberOfRows, file);
             return loader.Load(file);
         }
 

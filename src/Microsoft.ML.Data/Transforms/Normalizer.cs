@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Internal.Utilities;
@@ -294,7 +295,7 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Trains and returns a <see cref="NormalizingTransformer"/>.
         /// </summary>
-        public NormalizingTransformer Fit(IDataView input)
+        public async ITask<NormalizingTransformer> FitAsync(IDataView input)
         {
             _host.CheckValue(input, nameof(input));
             return NormalizingTransformer.Train(_host, input, _columns);
@@ -304,7 +305,7 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var result = inputSchema.ToDictionary(x => x.Name);

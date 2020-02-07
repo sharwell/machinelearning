@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -55,7 +56,7 @@ namespace Microsoft.ML.EntryPoints
             return value;
         }
 
-        public static TOut Train<TArg, TOut>(IHost host, TArg input,
+        public static async Task<TOut> TrainAsync<TArg, TOut>(IHost host, TArg input,
             Func<ITrainer> createTrainer,
             Func<string> getLabel = null,
             Func<string> getWeight = null,
@@ -80,7 +81,7 @@ namespace Microsoft.ML.EntryPoints
                 var trainer = createTrainer();
 
                 IDataView view = input.TrainingData;
-                TrainUtils.AddNormalizerIfNeeded(host, ch, trainer, ref view, feature, input.NormalizeFeatures);
+                (_, view) = await TrainUtils.AddNormalizerIfNeededAsync(host, ch, trainer, view, feature, input.NormalizeFeatures);
 
                 ch.Trace("Binding columns");
                 var roleMappedData = new RoleMappedData(view, label, feature, group, weight, name, custom);
@@ -116,7 +117,7 @@ namespace Microsoft.ML.EntryPoints
                     cachedRoleMappedData = new RoleMappedData(outputData, roleMappedData.Schema.GetColumnRoleNames());
                 }
 
-                var predictor = TrainUtils.Train(host, ch, cachedRoleMappedData, trainer, calibrator, maxCalibrationExamples);
+                var predictor = await TrainUtils.TrainAsync(host, ch, cachedRoleMappedData, trainer, calibrator, maxCalibrationExamples);
                 return new TOut() { PredictorModel = new PredictorModelImpl(host, roleMappedData, input.TrainingData, predictor) };
             }
         }

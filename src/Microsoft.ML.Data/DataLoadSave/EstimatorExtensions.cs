@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
@@ -109,21 +110,21 @@ namespace Microsoft.ML
                 _onFit = onFit;
             }
 
-            public TTransformer Fit(IDataView input)
+            public async ITask<TTransformer> FitAsync(IDataView input)
             {
-                var trans = _est.Fit(input);
+                var trans = await _est.FitAsync(input);
                 _onFit(trans);
                 return trans;
             }
 
-            public SchemaShape GetOutputSchema(SchemaShape inputSchema)
-                => _est.GetOutputSchema(inputSchema);
+            public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
+                => await _est.GetOutputSchemaAsync(inputSchema);
         }
 
         /// <summary>
-        /// Given an estimator, return a wrapping object that will call a delegate once <see cref="IEstimator{TTransformer}.Fit(IDataView)"/>
+        /// Given an estimator, return a wrapping object that will call a delegate once <see cref="IEstimator{TTransformer}.FitAsync(IDataView)"/>
         /// is called. It is often important for an estimator to return information about what was fit, which is why the
-        /// <see cref="IEstimator{TTransformer}.Fit(IDataView)"/> method returns a specifically typed object, rather than just a general
+        /// <see cref="IEstimator{TTransformer}.FitAsync(IDataView)"/> method returns a specifically typed object, rather than just a general
         /// <see cref="ITransformer"/>. However, at the same time, <see cref="IEstimator{TTransformer}"/> are often formed into pipelines
         /// with many objects, so we may need to build a chain of estimators via <see cref="EstimatorChain{TLastTransformer}"/> where the
         /// estimator for which we want to get the transformer is buried somewhere in this chain. For that scenario, we can through this
@@ -132,7 +133,7 @@ namespace Microsoft.ML
         /// <typeparam name="TTransformer">The type of <see cref="ITransformer"/> returned by <paramref name="estimator"/></typeparam>
         /// <param name="estimator">The estimator to wrap</param>
         /// <param name="onFit">The delegate that is called with the resulting <typeparamref name="TTransformer"/> instances once
-        /// <see cref="IEstimator{TTransformer}.Fit(IDataView)"/> is called. Because <see cref="IEstimator{TTransformer}.Fit(IDataView)"/>
+        /// <see cref="IEstimator{TTransformer}.FitAsync(IDataView)"/> is called. Because <see cref="IEstimator{TTransformer}.FitAsync(IDataView)"/>
         /// may be called multiple times, this delegate may also be called multiple times.</param>
         /// <returns>A wrapping estimator that calls the indicated delegate whenever fit is called</returns>
         /// <example>

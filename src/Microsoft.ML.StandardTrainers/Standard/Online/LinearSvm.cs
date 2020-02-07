@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Calibrators;
 using Microsoft.ML.CommandLine;
@@ -316,14 +317,14 @@ namespace Microsoft.ML.Trainers
             => new TrainState(ch, numFeatures, predictor, this);
 
         [TlcModule.EntryPoint(Name = "Trainers.LinearSvmBinaryClassifier", Desc = "Train a linear SVM.", UserName = UserNameValue, ShortName = ShortName)]
-        internal static CommonOutputs.BinaryClassificationOutput TrainLinearSvm(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainLinearSvmAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainLinearSVM");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.BinaryClassificationOutput>(host, input,
                 () => new LinearSvmTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 calibrator: input.Calibrator, maxCalibrationExamples: input.MaxCalibrationExamples);

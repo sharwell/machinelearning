@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -564,20 +565,20 @@ namespace Microsoft.ML.Trainers
             }
         }
 
-        IPredictor ITrainer.Train(TrainContext context) => Train(context);
-        FieldAwareFactorizationMachineModelParameters ITrainer<FieldAwareFactorizationMachineModelParameters>.Train(TrainContext context) => Train(context);
+        async Task<IPredictor> ITrainer.TrainAsync(TrainContext context) => Train(context);
+        async Task<FieldAwareFactorizationMachineModelParameters> ITrainer<FieldAwareFactorizationMachineModelParameters>.TrainAsync(TrainContext context) => Train(context);
 
         [TlcModule.EntryPoint(Name = "Trainers.FieldAwareFactorizationMachineBinaryClassifier",
             Desc = Summary,
             UserName = UserName,
             ShortName = ShortName)]
-        internal static CommonOutputs.BinaryClassificationOutput TrainBinary(IHostEnvironment env, Options input)
+        internal static async Task<CommonOutputs.BinaryClassificationOutput> TrainBinaryAsync(IHostEnvironment env, Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("Train a field-aware factorization machine");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
-            return TrainerEntryPointsUtils.Train<Options, CommonOutputs.BinaryClassificationOutput>(host, input, () => new FieldAwareFactorizationMachineTrainer(host, input),
+            return await TrainerEntryPointsUtils.TrainAsync<Options, CommonOutputs.BinaryClassificationOutput>(host, input, () => new FieldAwareFactorizationMachineTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName));
         }
 
@@ -612,13 +613,13 @@ namespace Microsoft.ML.Trainers
         }
 
         /// <summary> Trains and returns a <see cref="FieldAwareFactorizationMachinePredictionTransformer"/>.</summary>
-        public FieldAwareFactorizationMachinePredictionTransformer Fit(IDataView input) => Fit(input, null, null);
+        public async ITask<FieldAwareFactorizationMachinePredictionTransformer> FitAsync(IDataView input) => Fit(input, null, null);
 
         /// <summary>
         /// Schema propagation for transformers. Returns the output schema of the data, if
         /// the input schema is like the one provided.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
 
             _host.CheckValue(inputSchema, nameof(inputSchema));

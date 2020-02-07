@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime;
 
@@ -169,13 +170,13 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Trains and returns a <see cref="ValueToKeyMappingTransformer"/>.
         /// </summary>
-        public ValueToKeyMappingTransformer Fit(IDataView input) => new ValueToKeyMappingTransformer(_host, input, _columns, _keyData, false);
+        public async ITask<ValueToKeyMappingTransformer> FitAsync(IDataView input) => new ValueToKeyMappingTransformer(_host, input, _columns, _keyData, false);
 
         /// <summary>
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var result = inputSchema.ToDictionary(x => x.Name);

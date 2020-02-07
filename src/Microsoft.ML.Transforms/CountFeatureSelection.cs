@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -161,7 +162,7 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             _host.CheckValue(inputSchema, nameof(inputSchema));
             var result = inputSchema.ToDictionary(x => x.Name);
@@ -188,7 +189,7 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Trains and returns a <see cref="ITransformer"/>.
         /// </summary>
-        public ITransformer Fit(IDataView input)
+        public async ITask<ITransformer> FitAsync(IDataView input)
         {
             _host.CheckValue(input, nameof(input));
 
@@ -224,7 +225,7 @@ namespace Microsoft.ML.Transforms
         /// <summary>
         /// Create method corresponding to SignatureDataTransform.
         /// </summary>
-        internal static IDataTransform Create(IHostEnvironment env, Options options, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register(RegistrationName);
@@ -235,7 +236,7 @@ namespace Microsoft.ML.Transforms
 
             var columnOptions = options.Columns.Select(inColName => new ColumnOptions(inColName, count: options.Count)).ToArray();
 
-            return new CountFeatureSelectingEstimator(env, columnOptions).Fit(input).Transform(input) as IDataTransform;
+            return (await new CountFeatureSelectingEstimator(env, columnOptions).FitAsync(input)).Transform(input) as IDataTransform;
         }
 
         private static void CreateDropAndCopyColumns(ColumnOptions[] columnOptions, int size, long[][] scores,

@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -129,7 +130,7 @@ namespace Microsoft.ML.Transforms
         /// <paramref name="maximumNumberOfInverts"/> specifies the upper bound of the number of distinct input values mapping to a hash that should be retained.
         /// <value>0</value> does not retain any input values. <value>-1</value> retains all input values mapping to each hash.</param>
         /// <param name="outputKind">The type of output expected.</param>
-        private static IDataView Create(IHostEnvironment env,
+        private static async Task<IDataView> CreateAsync(IHostEnvironment env,
             IDataView input,
             string name,
             string source = null,
@@ -137,10 +138,10 @@ namespace Microsoft.ML.Transforms
             int maximumNumberOfInverts = OneHotHashEncodingEstimator.Defaults.MaximumNumberOfInverts,
             OneHotEncodingEstimator.OutputKind outputKind = OneHotHashEncodingEstimator.Defaults.OutputKind)
         {
-            return new OneHotHashEncodingEstimator(env, name, source, numberOfBits, maximumNumberOfInverts, outputKind).Fit(input).Transform(input) as IDataView;
+            return (await new OneHotHashEncodingEstimator(env, name, source, numberOfBits, maximumNumberOfInverts, outputKind).FitAsync(input)).Transform(input) as IDataView;
         }
 
-        internal static IDataTransform Create(IHostEnvironment env, Options options, IDataView input)
+        internal static async Task<IDataTransform> CreateAsync(IHostEnvironment env, Options options, IDataView input)
         {
             Contracts.CheckValue(env, nameof(env));
             var h = env.Register("Categorical");
@@ -161,18 +162,27 @@ namespace Microsoft.ML.Transforms
                     column.MaximumNumberOfInverts ?? options.MaximumNumberOfInverts);
                 columns.Add(col);
             }
-            return new OneHotHashEncodingEstimator(env, columns.ToArray()).Fit(input).Transform(input) as IDataTransform;
+            return (await new OneHotHashEncodingEstimator(env, columns.ToArray()).FitAsync(input)).Transform(input) as IDataTransform;
         }
 
         private readonly TransformerChain<ITransformer> _transformer;
 
-        internal OneHotHashEncodingTransformer(HashingEstimator hash, IEstimator<ITransformer> keyToVector, IDataView input)
+        internal OneHotHashEncodingTransformer(TransformerChain<ITransformer> transformer)
         {
-            if (keyToVector != null)
-                _transformer = hash.Append(keyToVector).Fit(input);
-            else
-                _transformer = new TransformerChain<ITransformer>(hash.Fit(input));
+            _transformer = transformer;
         }
+
+        internal static async Task<OneHotHashEncodingTransformer> CreateAsync(HashingEstimator hash, IEstimator<ITransformer> keyToVector, IDataView input)
+        {
+            TransformerChain<ITransformer> transformer;
+            if (keyToVector != null)
+                transformer = await hash.Append(keyToVector).FitAsync(input);
+            else
+                transformer = new TransformerChain<ITransformer>(await hash.FitAsync(input));
+
+            return new OneHotHashEncodingTransformer(transformer);
+        }
+
         /// <summary>
         /// Schema propagation for transformers. Returns the output schema of the data, if
         /// the input schema is like the one provided.
@@ -376,17 +386,17 @@ namespace Microsoft.ML.Transforms
         /// Returns the <see cref="SchemaShape"/> of the schema which will be produced by the transformer.
         /// Used for schema propagation and verification in a pipeline.
         /// </summary>
-        public SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             if (_toSomething != null)
-                return _hash.Append(_toSomething).GetOutputSchema(inputSchema);
+                return await _hash.Append(_toSomething).GetOutputSchemaAsync(inputSchema);
             else
-                return _hash.GetOutputSchema(inputSchema);
+                return await _hash.GetOutputSchemaAsync(inputSchema);
         }
 
         /// <summary>
         /// Trains and returns a <see cref="OneHotHashEncodingTransformer"/>.
         /// </summary>
-        public OneHotHashEncodingTransformer Fit(IDataView input) => new OneHotHashEncodingTransformer(_hash, _toSomething, input);
+        public async ITask<OneHotHashEncodingTransformer> FitAsync(IDataView input) => await OneHotHashEncodingTransformer.CreateAsync(_hash, _toSomething, input);
     }
 }

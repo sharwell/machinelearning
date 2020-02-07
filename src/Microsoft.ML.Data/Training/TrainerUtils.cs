@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML.Data;
 using Microsoft.ML.Internal.Utilities;
 using Microsoft.ML.Runtime;
@@ -419,7 +420,7 @@ namespace Microsoft.ML.Trainers
                 _trainer = trainer;
             }
 
-            public TPredictor Train(TrainContext context)
+            public async Task<TPredictor> TrainAsync(TrainContext context)
             {
                 _env.CheckValue(context, nameof(context));
                 // For the purpose of mapping into the estimator, we assume that the input estimator does not have
@@ -443,16 +444,16 @@ namespace Microsoft.ML.Trainers
                 if (nameMap.Count > 0)
                 {
                     var estimator = new ColumnCopyingEstimator(_env, nameMap.ToArray());
-                    data = estimator.Fit(data).Transform(data);
+                    data = (await estimator.FitAsync(data)).Transform(data);
                 }
-                var predictionTransformer = _trainer.Fit(data);
+                var predictionTransformer = await _trainer.FitAsync(data);
                 var model = predictionTransformer.Model;
                 if (model is TPredictor pred)
                     return pred;
                 throw _env.Except($"Training resulted in a model of type {model.GetType().Name}.");
             }
 
-            IPredictor ITrainer.Train(TrainContext context) => Train(context);
+            async Task<IPredictor> ITrainer.TrainAsync(TrainContext context) => await TrainAsync(context);
         }
 
         /// <summary>

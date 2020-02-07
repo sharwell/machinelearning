@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -209,20 +210,20 @@ namespace Microsoft.ML.Data
             Utils.CheckOptionalUserDirectory(ImplOptions.OutputDataFile, nameof(ImplOptions.OutputDataFile));
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             using (var ch = Host.Start("Evaluate"))
             {
-                RunCore(ch);
+                await RunCoreAsync(ch);
             }
         }
 
-        private void RunCore(IChannel ch)
+        private async Task RunCoreAsync(IChannel ch)
         {
             Host.AssertValue(ch);
 
             ch.Trace("Creating loader");
-            IDataView view = CreateAndSaveLoader(
+            IDataView view = await CreateAndSaveLoaderAsync(
                 (env, source) => new IO.BinaryLoader(env, new IO.BinaryLoader.Arguments(), source));
 
             ch.Trace("Binding columns");

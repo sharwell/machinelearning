@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.Command;
 using Microsoft.ML.CommandLine;
@@ -87,21 +88,21 @@ namespace Microsoft.ML.Data
             Utils.CheckOptionalUserDirectory(ImplOptions.OutputDataFile, nameof(ImplOptions.OutputDataFile));
         }
 
-        public override void Run()
+        public override async Task RunAsync()
         {
             using (var ch = Host.Start("Score"))
             {
-                RunCore(ch);
+                await RunCoreAsync(ch);
             }
         }
 
-        private void RunCore(IChannel ch)
+        private async Task RunCoreAsync(IChannel ch)
         {
             Host.AssertValue(ch);
 
             ch.Trace("Creating loader");
 
-            LoadModelObjects(ch, true, out var predictor, true, out var trainSchema, out var loader);
+            var (predictor, trainSchema, loader) = await LoadModelObjectsAsync(ch, true, true);
             ch.AssertValue(predictor);
             ch.AssertValueOrNull(trainSchema);
             ch.AssertValue(loader);
@@ -124,10 +125,10 @@ namespace Microsoft.ML.Data
             if (scorer == null)
                 scorer = ScoreUtils.GetScorerComponent(Host, mapper);
 
-            loader = LegacyCompositeDataLoader.ApplyTransform(Host, loader, "Scorer", scorer.ToString(),
-                (env, view) => scorer.CreateComponent(env, view, mapper, trainSchema));
+            loader = await LegacyCompositeDataLoader.ApplyTransformAsync(Host, loader, "Scorer", scorer.ToString(),
+                async (env, view) => scorer.CreateComponent(env, view, mapper, trainSchema));
 
-            loader = LegacyCompositeDataLoader.Create(Host, loader, ImplOptions.PostTransform);
+            loader = await LegacyCompositeDataLoader.CreateAsync(Host, loader, ImplOptions.PostTransform);
 
             if (!string.IsNullOrWhiteSpace(ImplOptions.OutputModelFile))
             {

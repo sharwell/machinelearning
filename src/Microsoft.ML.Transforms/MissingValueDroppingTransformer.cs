@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -35,7 +36,7 @@ namespace Microsoft.ML.Transforms
         {
         }
 
-        public override SchemaShape GetOutputSchema(SchemaShape inputSchema)
+        public override async Task<SchemaShape> GetOutputSchemaAsync(SchemaShape inputSchema)
         {
             Host.CheckValue(inputSchema, nameof(inputSchema));
 

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -387,21 +388,21 @@ namespace Microsoft.ML.Trainers
         /// Continues the training of a <see cref="LbfgsMaximumEntropyMulticlassTrainer"/> using an already trained <paramref name="modelParameters"/> and returns
         /// a <see cref="MulticlassPredictionTransformer{MulticlassLogisticRegressionModelParameters}"/>.
         /// </summary>
-        public MulticlassPredictionTransformer<MaximumEntropyModelParameters> Fit(IDataView trainData, MaximumEntropyModelParameters modelParameters)
-            => TrainTransformer(trainData, initPredictor: modelParameters);
+        public async Task<MulticlassPredictionTransformer<MaximumEntropyModelParameters>> FitAsync(IDataView trainData, MaximumEntropyModelParameters modelParameters)
+            => await TrainTransformerAsync(trainData, initPredictor: modelParameters);
 
         [TlcModule.EntryPoint(Name = "Trainers.LogisticRegressionClassifier",
             Desc = LbfgsMaximumEntropyMulticlassTrainer.Summary,
             UserName = LbfgsMaximumEntropyMulticlassTrainer.UserNameValue,
             ShortName = LbfgsMaximumEntropyMulticlassTrainer.ShortName)]
-        internal static CommonOutputs.MulticlassClassificationOutput TrainMulticlass(IHostEnvironment env, LbfgsMaximumEntropyMulticlassTrainer.Options input)
+        internal static async Task<CommonOutputs.MulticlassClassificationOutput> TrainMulticlassAsync(IHostEnvironment env, LbfgsMaximumEntropyMulticlassTrainer.Options input)
         {
             Contracts.CheckValue(env, nameof(env));
             var host = env.Register("TrainLRMultiClass");
             host.CheckValue(input, nameof(input));
             EntryPointUtils.CheckInputArgs(host, input);
 
-            return TrainerEntryPointsUtils.Train<LbfgsMaximumEntropyMulticlassTrainer.Options, CommonOutputs.MulticlassClassificationOutput>(host, input,
+            return await TrainerEntryPointsUtils.TrainAsync<LbfgsMaximumEntropyMulticlassTrainer.Options, CommonOutputs.MulticlassClassificationOutput>(host, input,
                 () => new LbfgsMaximumEntropyMulticlassTrainer(host, input),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.LabelColumnName),
                 () => TrainerEntryPointsUtils.FindColumn(host, input.TrainingData.Schema, input.ExampleWeightColumnName));

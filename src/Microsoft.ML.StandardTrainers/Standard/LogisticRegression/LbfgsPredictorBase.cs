@@ -408,7 +408,7 @@ namespace Microsoft.ML.Trainers
         /// <summary>
         /// The basic training calls the optimizer
         /// </summary>
-        private protected override TModel TrainModelCore(TrainContext context)
+        private protected override async Task<TModel> TrainModelCoreAsync(TrainContext context)
         {
             Contracts.CheckValue(context, nameof(context));
             Host.CheckParam(context.InitialPredictor == null || context.InitialPredictor is IPredictor, nameof(context.InitialPredictor));

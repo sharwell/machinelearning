@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.ML;
 using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
@@ -547,42 +548,16 @@ namespace Microsoft.ML.Data
                 loaderAssemblyName: typeof(SvmLightLoader).Assembly.FullName);
         }
 
-        internal SvmLightLoader(IHostEnvironment env, Options options = null, IMultiStreamSource dataSample = null)
+        private SvmLightLoader(
+            IHost host,
+            ITransformer keyVectorsToIndexVectors,
+            FeatureIndices indicesKind,
+            ulong featureCount)
         {
-            Contracts.CheckValue(env, nameof(env));
-            _host = env.Register(LoaderSignature);
-            if (options == null)
-                options = new Options();
-            _host.CheckUserArg(options.InputSize >= 0, nameof(options.InputSize), "Maximum feature index must be positive, or 0 to infer it from the dataset");
-
-            _indicesKind = options.FeatureIndices;
-            if (_indicesKind != FeatureIndices.Names)
-            {
-                if (options.InputSize > 0)
-                    _featureCount = (ulong)options.InputSize;
-                else
-                {
-                    if (dataSample == null || dataSample.Count == 0)
-                        throw env.Except("If the number of features is not specified, a dataset must be provided to infer it.");
-                    var data = GetData(_host, options.NumberOfRows, dataSample);
-                    _featureCount = InferMax(_host, data) + (ulong)(_indicesKind == FeatureIndices.ZeroBased ? 1 : 0);
-                }
-                _host.Assert(_featureCount <= int.MaxValue);
-            }
-            else
-            {
-                // We need to train a ValueToKeyMappingTransformer.
-                if (dataSample == null || dataSample.Count == 0)
-                    throw env.Except("To use the text feature names option, a dataset must be provided");
-
-                var data = GetData(_host, options.NumberOfRows, dataSample);
-                _keyVectorsToIndexVectors = new ValueToKeyMappingEstimator(_host, nameof(IntermediateInput.FeatureKeys)).Fit(data);
-                var keyCol = _keyVectorsToIndexVectors.GetOutputSchema(data.Schema).GetColumnOrNull(nameof(Indices.FeatureKeys));
-                _host.Assert(keyCol.HasValue);
-                var keyType = keyCol.Value.Type.GetItemType() as KeyDataViewType;
-                _host.AssertValue(keyType);
-                _featureCount = keyType.Count;
-            }
+            _host = host;
+            _keyVectorsToIndexVectors = keyVectorsToIndexVectors;
+            _indicesKind = indicesKind;
+            _featureCount = featureCount;
 
             _outputSchema = CreateOutputSchema();
         }
@@ -603,6 +578,51 @@ namespace Microsoft.ML.Data
             _featureCount = ctx.Reader.ReadUInt64();
 
             ctx.LoadModelOrNull<ITransformer, SignatureLoadModel>(_host, out _keyVectorsToIndexVectors, "KeysToIndices");
+        }
+
+        internal static async Task<SvmLightLoader> CreateAsync(IHostEnvironment env, Options options = null, IMultiStreamSource dataSample = null)
+        {
+            IHost host;
+            ITransformer keyVectorsToIndexVectors = null;
+            FeatureIndices indicesKind;
+            ulong featureCount;
+
+            Contracts.CheckValue(env, nameof(env));
+            host = env.Register(LoaderSignature);
+            if (options == null)
+                options = new Options();
+            host.CheckUserArg(options.InputSize >= 0, nameof(options.InputSize), "Maximum feature index must be positive, or 0 to infer it from the dataset");
+
+            indicesKind = options.FeatureIndices;
+            if (indicesKind != FeatureIndices.Names)
+            {
+                if (options.InputSize > 0)
+                    featureCount = (ulong)options.InputSize;
+                else
+                {
+                    if (dataSample == null || dataSample.Count == 0)
+                        throw env.Except("If the number of features is not specified, a dataset must be provided to infer it.");
+                    var data = GetData(host, options.NumberOfRows, dataSample);
+                    featureCount = InferMax(host, data) + (ulong)(indicesKind == FeatureIndices.ZeroBased ? 1 : 0);
+                }
+                host.Assert(featureCount <= int.MaxValue);
+            }
+            else
+            {
+                // We need to train a ValueToKeyMappingTransformer.
+                if (dataSample == null || dataSample.Count == 0)
+                    throw env.Except("To use the text feature names option, a dataset must be provided");
+
+                var data = GetData(host, options.NumberOfRows, dataSample);
+                keyVectorsToIndexVectors = await new ValueToKeyMappingEstimator(host, nameof(IntermediateInput.FeatureKeys)).FitAsync(data);
+                var keyCol = keyVectorsToIndexVectors.GetOutputSchema(data.Schema).GetColumnOrNull(nameof(Indices.FeatureKeys));
+                host.Assert(keyCol.HasValue);
+                var keyType = keyCol.Value.Type.GetItemType() as KeyDataViewType;
+                host.AssertValue(keyType);
+                featureCount = keyType.Count;
+            }
+
+            return new SvmLightLoader(host, keyVectorsToIndexVectors, indicesKind, featureCount);
         }
 
         internal static SvmLightLoader Create(IHostEnvironment env, ModelLoadContext ctx)
@@ -761,11 +781,6 @@ namespace Microsoft.ML.Data
         internal static ILegacyDataLoader Create(IHostEnvironment env, ModelLoadContext ctx, IMultiStreamSource files)
         {
             var svmLoader = Create(env, ctx);
-            return new LegacyLoader(svmLoader, svmLoader.Load(files));
-        }
-        internal static ILegacyDataLoader Create(IHostEnvironment env, Options options, IMultiStreamSource files)
-        {
-            var svmLoader = new SvmLightLoader(env, options, files);
             return new LegacyLoader(svmLoader, svmLoader.Load(files));
         }
 
